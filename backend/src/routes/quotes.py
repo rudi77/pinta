@@ -191,29 +191,21 @@ async def get_quote(
     db: AsyncSession = Depends(get_db)
 ):
     """Get specific quote"""
-    
     result = await db.execute(
         select(Quote)
         .where(Quote.id == quote_id)
         .where(Quote.user_id == current_user.id)
+        .options(selectinload(Quote.quote_items))
     )
     quote = result.scalar_one_or_none()
-    
+
     if not quote:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Quote not found"
         )
-    
-    # Load quote items
-    items_result = await db.execute(
-        select(QuoteItem)
-        .where(QuoteItem.quote_id == quote.id)
-        .order_by(QuoteItem.position)
-    )
-    quote.quote_items = items_result.scalars().all()
-    
-    return quote
+
+    return quote_to_response(quote)
 
 @router.put("/{quote_id}", response_model=QuoteResponse)
 async def update_quote(

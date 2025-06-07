@@ -238,7 +238,11 @@ const Dashboard = ({ onNavigate }) => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {quotes.map((quote) => (
-                <tr key={quote.id} className="hover:bg-gray-50">
+                <tr 
+                  key={quote.id} 
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => navigate(`/quotes/${quote.id}`)}
+                >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {quote.quote_number}
                   </td>

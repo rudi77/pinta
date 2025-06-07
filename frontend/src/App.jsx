@@ -8,6 +8,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Login from './components/Login';
 import Register from './components/Register';
 import ChatQuoteWizard from './components/ChatQuoteWizard';
+import QuoteDetail from './components/QuoteDetail';
 
 // Header Component
 const Header = () => {
@@ -82,6 +83,7 @@ function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/new-quote" element={<QuoteCreator />} />
             <Route path="/chat-quote" element={<ChatQuoteWizard />} />
+            <Route path="/quotes/:quoteId" element={<QuoteDetail />} />
             <Route path="/" element={<Navigate to="/login" />} />
           </Routes>
         </div>
