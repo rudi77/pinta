@@ -7,6 +7,7 @@ import os
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
+import asyncio
 
 from src.services.ai_service import AIService
 from src.services.pdf_service import PDFService
@@ -25,12 +26,18 @@ from src.schemas.schemas import (
     ErrorResponse
 )
 from src.database import get_db
+from .quotes import generate_quote_number
 
 router = APIRouter(tags=["AI"])
 logger = logging.getLogger(__name__)
 
 # Initialize AI service
 ai_service = AIService()
+
+def default_json(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 @router.post("/analyze-input", response_model=AIAnalysisResponse)
 async def analyze_project_input(
@@ -131,46 +138,45 @@ async def generate_quote_with_ai(
     """Generate a detailed quote based on project data and user answers"""
     try:
         logger.info(f"Generating AI quote for user {current_user.id}")
-        
+        print("STEP 1: Starte generate_quote_with_ai")
+        # conversation_history in dicts umwandeln
+        history = [msg.model_dump() if hasattr(msg, 'model_dump') else dict(msg) for msg in request.conversation_history] if request.conversation_history else None
+        print("STEP 2: Nach history umwandeln")
         result = await ai_service.process_answers_and_generate_quote(
             project_data=request.project_data,
             answers=request.answers,
-            conversation_history=request.conversation_history
+            conversation_history=history
         )
-        
+        print("STEP 3: Nach KI-Quote-Generierung")
         # Create quote in database
         quote_number = generate_quote_number()
-        
-        # Convert conversation history to JSON string
-        conversation_history = None
-        if request.conversation_history:
-            conversation_history = json.dumps([msg.model_dump() for msg in request.conversation_history])
-        
+        print("STEP 4: Nach generate_quote_number")
         # Create quote
         quote = Quote(
             quote_number=quote_number,
             user_id=current_user.id,
-            customer_name=result["quote"]["customer_name"],
-            customer_email=result["quote"].get("customer_email"),
-            customer_phone=result["quote"].get("customer_phone"),
-            customer_address=result["quote"].get("customer_address"),
+            customer_name=request.customer_name,
+            customer_email=request.customer_email,
+            customer_phone=request.customer_phone,
+            customer_address=request.customer_address,
             project_title=result["quote"]["project_title"],
             project_description=result["quote"].get("project_description"),
             status="draft",
             ai_processing_status="completed",
             created_by_ai=True,
-            conversation_history=conversation_history
+            conversation_history=json.dumps(history, default=default_json) if history is not None else None
         )
-        
+        print("STEP 5: Nach Quote-Objekt-Erstellung")
         db.add(quote)
         await db.flush()
-        
+        print("STEP 6: Nach db.flush()")
         # Add quote items
         total_amount = 0.0
-        for item in result["items"]:
+        quote_items_dicts = []
+        for idx, item in enumerate(result["items"], start=1):
             quote_item = QuoteItem(
                 quote_id=quote.id,
-                position=item["position"],
+                position=item.get("position", idx),
                 description=item["description"],
                 quantity=item["quantity"],
                 unit=item["unit"],
@@ -182,15 +188,22 @@ async def generate_quote_with_ai(
             )
             db.add(quote_item)
             total_amount += item["total_price"]
-        
+            quote_items_dicts.append({
+                "position": quote_item.position,
+                "description": quote_item.description,
+                "quantity": quote_item.quantity,
+                "unit": quote_item.unit,
+                "unit_price": quote_item.unit_price,
+                "total_price": quote_item.total_price,
+                "room_name": quote_item.room_name
+            })
+        print("STEP 7: Nach Hinzufügen der QuoteItems")
         # Update quote with total amount
         quote.total_amount = total_amount
-        
+        print("STEP 8: Nach Setzen von total_amount")
         await db.commit()
-        
-        # Generate PDF
-        pdf_service = PDFService()
-        pdf_result = pdf_service.generate_quote_pdf({
+        print("STEP 9: Nach db.commit()")
+        pdf_data = {
             "quote_number": quote.quote_number,
             "customer_name": quote.customer_name,
             "customer_email": quote.customer_email,
@@ -198,20 +211,13 @@ async def generate_quote_with_ai(
             "customer_address": quote.customer_address,
             "project_title": quote.project_title,
             "project_description": quote.project_description,
-            "quote_items": [
-                {
-                    "position": item.position,
-                    "description": item.description,
-                    "quantity": item.quantity,
-                    "unit": item.unit,
-                    "unit_price": item.unit_price,
-                    "total_price": item.total_price,
-                    "room_name": item.room_name
-                }
-                for item in quote.quote_items
-            ]
-        })
-        
+            "quote_items": quote_items_dicts
+        }
+        print(f"STEP 10: pdf_data: {pdf_data}")
+        # Jetzt PDF-Generierung im Threadpool
+        pdf_service = PDFService()
+        pdf_result = await asyncio.to_thread(pdf_service.generate_quote_pdf, pdf_data)
+        print("STEP 11: Nach PDF-Generierung")
         # Add final quote generation to conversation
         if request.conversation_history:
             request.conversation_history.append({
@@ -219,16 +225,18 @@ async def generate_quote_with_ai(
                 "content": "Kostenvoranschlag wurde erstellt und als PDF gespeichert",
                 "timestamp": datetime.now().isoformat()
             })
-        
+        print("STEP 12: Nach Hinzufügen zur conversation_history")
         return AIQuoteGenerationResponse(
             quote=result.get("quote", {}),
             items=result.get("items", []),
             notes=result.get("notes", ""),
             recommendations=result.get("recommendations", []),
             conversation_history=request.conversation_history,
+            total_amount=quote.total_amount,
             success=True,
             pdf_url=pdf_result.get("pdf_url") if pdf_result.get("success") else None
         )
+        print("STEP 13: Nach Response")
         
     except Exception as e:
         logger.error(f"Error generating AI quote: {str(e)}")

@@ -21,10 +21,12 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log("Register submit clicked", { email, username, password });
     if (password !== confirmPassword) {
       alert('Passwörter stimmen nicht überein');
       return;
     }
+    console.log("Register submit clicked 2", { email, username, password });
     try {
       await register({ email, username, password });
     } catch (error) {

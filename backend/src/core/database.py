@@ -4,7 +4,7 @@ import os
 from typing import AsyncGenerator
 
 # Database URL
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./maler_kostenvoranschlag.db")
+DATABASE_URL = "sqlite+aiosqlite:///./test_maler_kostenvoranschlag.db"
 
 # Create async engine
 engine = create_async_engine(

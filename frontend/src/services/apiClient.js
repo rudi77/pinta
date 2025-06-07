@@ -80,6 +80,7 @@ class ApiClient {
   }
 
   async register(userData) {
+    console.log('BEFORE REGISTER RESPONSE');
     const response = await this.request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
@@ -198,7 +199,10 @@ class ApiClient {
   }
 
   async generateQuoteWithAI(data) {
-    const response = await this.request('/ai/generate-quote', data);
+    const response = await this.request('/ai/generate-quote', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
     return response.data;
   }
 

@@ -209,3 +209,4 @@ frontend/.env.development.local
 frontend/.env.test.local
 frontend/.env.production.local
 frontend/node_modules
+backend/test_maler_kostenvoranschlag.db

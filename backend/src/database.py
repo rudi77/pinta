@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import NullPool
 
 # Database URL - using SQLite for development
-DATABASE_URL = "sqlite+aiosqlite:///./pinta.db"
+DATABASE_URL = "sqlite+aiosqlite:///./test_maler_kostenvoranschlag.db"
 
 # Create async engine
 engine = create_async_engine(

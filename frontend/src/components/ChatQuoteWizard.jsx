@@ -16,6 +16,13 @@ const ChatQuoteWizard = ({ onNavigate }) => {
   const [conversationHistory, setConversationHistory] = useState([]);
   const [currentQuote, setCurrentQuote] = useState(null);
   const [showQuoteButton, setShowQuoteButton] = useState(false);
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [customerData, setCustomerData] = useState({
+    customer_name: '',
+    customer_address: '',
+    customer_email: '',
+    customer_phone: ''
+  });
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -168,12 +175,21 @@ const ChatQuoteWizard = ({ onNavigate }) => {
     }
   };
 
-  const handleGenerateQuote = async () => {
+  const handleShowCustomerForm = () => {
+    setShowCustomerForm(true);
+  };
+
+  const handleCustomerInputChange = (e) => {
+    const { name, value } = e.target;
+    setCustomerData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCustomerFormSubmit = async (e) => {
+    e.preventDefault();
     setLoading(true);
     setError(null);
-
     try {
-      // Generate quote
+      // Generate quote with customer data
       const quoteData = await apiClient.generateQuoteWithAI({
         project_data: {
           description: messages.find(m => m.role === 'user')?.content || ''
@@ -182,31 +198,24 @@ const ChatQuoteWizard = ({ onNavigate }) => {
           question: m.content,
           answer: m.content
         })),
-        conversation_history: conversationHistory
+        conversation_history: conversationHistory,
+        ...customerData
       });
-
-      // Add success message to chat
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: 'Kostenvoranschlag wurde erstellt! Sie können ihn jetzt speichern und als PDF herunterladen.',
         type: 'text'
       }]);
-
-      // Update conversation history
       setConversationHistory(prev => [...prev, {
         role: 'assistant',
         content: 'Kostenvoranschlag wurde erstellt! Sie können ihn jetzt speichern und als PDF herunterladen.',
         timestamp: new Date().toISOString()
       }]);
-
-      // Set current quote
       setCurrentQuote(quoteData);
-
+      setShowCustomerForm(false);
     } catch (err) {
       console.error('Failed to generate quote:', err);
       setError('Fehler beim Erstellen des Kostenvoranschlags: ' + (err.message || 'Unbekannter Fehler'));
-      
-      // Add error message to chat
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: 'Entschuldigung, beim Erstellen des Kostenvoranschlags ist ein Fehler aufgetreten.',
@@ -291,10 +300,10 @@ const ChatQuoteWizard = ({ onNavigate }) => {
         </div>
 
         {/* Quote generation button */}
-        {showQuoteButton && !currentQuote && (
+        {showQuoteButton && !currentQuote && !showCustomerForm && (
           <div className="p-4 border-t">
             <Button
-              onClick={handleGenerateQuote}
+              onClick={handleShowCustomerForm}
               disabled={loading}
               className="w-full"
             >
@@ -303,6 +312,62 @@ const ChatQuoteWizard = ({ onNavigate }) => {
               ) : null}
               Kostenvoranschlag erstellen
             </Button>
+          </div>
+        )}
+
+        {/* Kundenformular */}
+        {showCustomerForm && !currentQuote && (
+          <div className="p-4 border-t bg-gray-50 rounded shadow mt-4">
+            <form onSubmit={handleCustomerFormSubmit} className="space-y-4 max-w-lg mx-auto">
+              <h2 className="text-lg font-semibold mb-2">Ihre Kontaktdaten für das Angebot</h2>
+              <div>
+                <label className="block text-sm font-medium mb-1">Name *</label>
+                <Input
+                  name="customer_name"
+                  value={customerData.customer_name}
+                  onChange={handleCustomerInputChange}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Adresse *</label>
+                <Input
+                  name="customer_address"
+                  value={customerData.customer_address}
+                  onChange={handleCustomerInputChange}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">E-Mail *</label>
+                <Input
+                  name="customer_email"
+                  type="email"
+                  value={customerData.customer_email}
+                  onChange={handleCustomerInputChange}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Telefon *</label>
+                <Input
+                  name="customer_phone"
+                  type="tel"
+                  value={customerData.customer_phone}
+                  onChange={handleCustomerInputChange}
+                  required
+                />
+              </div>
+              <div className="flex space-x-2 mt-4">
+                <Button type="submit" disabled={loading} className="w-full">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Angebot anfordern
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowCustomerForm(false)} disabled={loading}>
+                  Abbrechen
+                </Button>
+              </div>
+            </form>
           </div>
         )}
 

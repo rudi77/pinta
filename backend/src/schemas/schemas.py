@@ -75,6 +75,10 @@ class AIQuoteGenerationRequest(BaseModel):
     project_data: Dict[str, Any]
     answers: List[Dict[str, Any]]
     conversation_history: List[AIConversationMessage]
+    customer_name: str
+    customer_address: str
+    customer_email: str
+    customer_phone: str
 
 class AIQuoteGenerationResponse(BaseModel):
     quote: Dict[str, Any]

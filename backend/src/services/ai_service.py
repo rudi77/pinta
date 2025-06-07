@@ -14,7 +14,7 @@ class AIService:
         api_key = os.getenv('OPENAI_API_KEY')
         if api_key and api_key != 'test_key_placeholder' and api_key.startswith('sk-'):
             self.client = openai.AsyncOpenAI(api_key=api_key)
-            self.model = "gpt-4"
+            self.model = "gpt-4.1-mini"
             self.enabled = True
             logger.info("OpenAI client initialized successfully")
         else:

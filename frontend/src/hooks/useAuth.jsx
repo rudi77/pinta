@@ -98,18 +98,24 @@ export function AuthProvider({ children }) {
 
   // Register function
   const register = async (userData) => {
-    setError(null);
+    console.log("register 2", { userData });
     try {
+      try {
+        console.log("register", { userData });
+      } catch (e) {
+        console.log("console.log failed!", e);
+      }
       const response = await apiClient.register(userData);
       // After successful registration, log the user in
+      console.log("BEFORE LOGIN", userData);
       const loginResponse = await apiClient.login(userData.email, userData.password);
+      console.log("AFTER LOGIN", loginResponse);
       localStorage.setItem('access_token', loginResponse.access_token);
       setIsAuthenticated(true);
-      
       // Fetch user data
-      const userData = await apiClient.getCurrentUser();
-      setUser(userData);
-      
+      const userDataFromApi = await apiClient.getCurrentUser();
+      console.log("USER DATA FROM API", userDataFromApi);
+      setUser(userDataFromApi);
       return response;
     } catch (err) {
       setError(err.message || 'Registration failed');
