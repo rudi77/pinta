@@ -52,6 +52,41 @@ async def check_user_quota(user: User, db: AsyncSession) -> bool:
     await db.commit()
     return True
 
+def quote_to_response(quote):
+    return {
+        "id": quote.id,
+        "quote_number": quote.quote_number,
+        "user_id": quote.user_id,
+        "customer_name": quote.customer_name,
+        "customer_email": quote.customer_email,
+        "customer_phone": quote.customer_phone,
+        "customer_address": quote.customer_address,
+        "project_title": quote.project_title,
+        "project_description": quote.project_description or "",
+        "total_amount": quote.total_amount,
+        "status": quote.status,
+        "created_by_ai": quote.created_by_ai,
+        "conversation_history": json.loads(quote.conversation_history) if quote.conversation_history else [],
+        "items": [
+            {
+                "id": item.id,
+                "quote_id": item.quote_id,
+                "position": item.position,
+                "description": item.description,
+                "quantity": item.quantity,
+                "unit": item.unit,
+                "unit_price": item.unit_price,
+                "total_price": item.total_price,
+                "room_name": item.room_name,
+                "created_at": item.created_at,
+                "updated_at": item.updated_at
+            }
+            for item in quote.quote_items
+        ],
+        "created_at": quote.created_at,
+        "updated_at": quote.updated_at,
+    }
+
 @router.get("/", response_model=List[QuoteResponse])
 async def get_quotes(
     status_filter: Optional[str] = None,
@@ -72,7 +107,7 @@ async def get_quotes(
     result = await db.execute(query)
     quotes = result.scalars().all()
     
-    return quotes
+    return [quote_to_response(q) for q in quotes]
 
 @router.post("/", response_model=QuoteResponse)
 async def create_quote(
