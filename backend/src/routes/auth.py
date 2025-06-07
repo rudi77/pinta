@@ -27,8 +27,8 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    username: str = payload.get("sub")
-    if username is None:
+    email: str = payload.get("sub")
+    if email is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
@@ -36,7 +36,7 @@ async def get_current_user(
         )
     
     # Get user from database
-    result = await db.execute(select(User).where(User.username == username))
+    result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     
     if user is None:
@@ -51,6 +51,9 @@ async def get_current_user(
 @router.post("/register", response_model=SuccessResponse)
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """Register a new user"""
+    
+    # Log the incoming request data
+    print("Registration request data:", user_data.dict())
     
     # Check if user already exists
     result = await db.execute(
@@ -83,7 +86,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     
     return SuccessResponse(message="User registered successfully")
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
     """Authenticate user and return access token"""
     
@@ -98,10 +101,10 @@ async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Create access token
-    access_token = create_access_token(data={"sub": user.username})
+    # Create access token with email as sub
+    access_token = create_access_token(data={"sub": user.email})
     
-    return Token(access_token=access_token, token_type="bearer")
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):

@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import apiClient from '../services/apiClient';
+import { Card } from './ui/card';
+import { Button } from './ui/button';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = ({ onNavigate }) => {
   const { user, demoMode } = useAuth();
@@ -13,6 +16,7 @@ const Dashboard = ({ onNavigate }) => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -272,6 +276,27 @@ const Dashboard = ({ onNavigate }) => {
             </button>
           </div>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Neuen Kostenvoranschlag erstellen</h3>
+          <div className="space-y-4">
+            <Button
+              onClick={() => navigate('/create-quote')}
+              className="w-full"
+            >
+              Klassischer Editor
+            </Button>
+            <Button
+              onClick={() => navigate('/chat-quote')}
+              className="w-full"
+              variant="outline"
+            >
+              KI-Assistent
+            </Button>
+          </div>
+        </Card>
       </div>
     </div>
   );

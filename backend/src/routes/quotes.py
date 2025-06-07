@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
 import uuid
+import json
 
 from src.core.database import get_db
 from src.routes.auth import get_current_user
@@ -91,6 +92,11 @@ async def create_quote(
     # Create quote
     quote_number = generate_quote_number()
     
+    # Convert conversation history to JSON string if present
+    conversation_history = None
+    if quote_data.conversation_history:
+        conversation_history = json.dumps([msg.model_dump() for msg in quote_data.conversation_history])
+    
     quote = Quote(
         quote_number=quote_number,
         user_id=current_user.id,
@@ -101,7 +107,9 @@ async def create_quote(
         project_title=quote_data.project_title,
         project_description=quote_data.project_description,
         status="draft",
-        ai_processing_status="pending"
+        ai_processing_status="pending",
+        created_by_ai=quote_data.created_by_ai,
+        conversation_history=conversation_history
     )
     
     db.add(quote)
@@ -196,6 +204,13 @@ async def update_quote(
     
     # Update quote
     update_data = quote_update.model_dump(exclude_unset=True)
+    
+    # Convert conversation history to JSON string if present
+    if "conversation_history" in update_data:
+        update_data["conversation_history"] = json.dumps(
+            [msg.model_dump() for msg in update_data["conversation_history"]]
+        )
+    
     if update_data:
         await db.execute(
             update(Quote)

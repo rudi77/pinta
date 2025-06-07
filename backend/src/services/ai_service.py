@@ -5,6 +5,7 @@ import asyncio
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import logging
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ class AIService:
         api_key = os.getenv('OPENAI_API_KEY')
         if api_key and api_key != 'test_key_placeholder' and api_key.startswith('sk-'):
             self.client = openai.AsyncOpenAI(api_key=api_key)
-            self.model = "gpt-4o"
+            self.model = "gpt-4"
             self.enabled = True
             logger.info("OpenAI client initialized successfully")
         else:
@@ -22,7 +23,7 @@ class AIService:
             self.enabled = False
             logger.warning("OpenAI API key not configured, using mock responses")
 
-    async def analyze_project_description(self, description: str, context: str = "initial_input") -> Dict:
+    async def analyze_project_description(self, description: str, context: str = "initial_input", conversation_history: Optional[List[Dict]] = None) -> Dict:
         """Analyze project description and generate intelligent follow-up questions"""
         
         if not self.enabled:
@@ -59,18 +60,28 @@ class AIService:
                 "suggestions": ["hilfreiche Tipps für den Kunden"]
             }"""
 
-            user_prompt = f"""Projektbeschreibung: {description}
-
-            Kontext: {context}
+            # Build conversation context
+            messages = [{"role": "system", "content": system_prompt}]
             
-            Bitte analysiere diese Beschreibung und stelle intelligente Rückfragen."""
+            if conversation_history:
+                for msg in conversation_history[-5:]:  # Last 5 messages for context
+                    messages.append({
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", "")
+                    })
+            
+            messages.append({
+                "role": "user",
+                "content": f"""Projektbeschreibung: {description}
+
+                Kontext: {context}
+                
+                Bitte analysiere diese Beschreibung und stelle intelligente Rückfragen."""
+            })
 
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
+                messages=messages,
                 temperature=0.7,
                 max_tokens=1500
             )
@@ -81,7 +92,6 @@ class AIService:
             try:
                 # remove '''json ''' from content
                 content = content.replace('```json', '').replace('```', '')
-                print(content)
                 result = json.loads(content)
                 return result
             except json.JSONDecodeError:
@@ -94,7 +104,8 @@ class AIService:
 
     async def process_answers_and_generate_quote(self, 
                                                 project_data: Dict, 
-                                                answers: List[Dict]) -> Dict:
+                                                answers: List[Dict],
+                                                conversation_history: Optional[List[Dict]] = None) -> Dict:
         """Process user answers and generate a detailed quote"""
         
         if not self.enabled:
@@ -136,20 +147,30 @@ class AIService:
                 "recommendations": ["string"]
             }"""
 
-            user_prompt = f"""Projektdaten:
-            {json.dumps(project_data, indent=2, ensure_ascii=False)}
+            # Build conversation context
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            if conversation_history:
+                for msg in conversation_history[-5:]:  # Last 5 messages for context
+                    messages.append({
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", "")
+                    })
+            
+            messages.append({
+                "role": "user",
+                "content": f"""Projektdaten:
+                {json.dumps(project_data, indent=2, ensure_ascii=False)}
 
-            Kundenantworten:
-            {json.dumps(answers, indent=2, ensure_ascii=False)}
+                Kundenantworten:
+                {json.dumps(answers, indent=2, ensure_ascii=False)}
 
-            Erstelle einen detaillierten Kostenvoranschlag."""
+                Erstelle einen detaillierten Kostenvoranschlag."""
+            })
 
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
+                messages=messages,
                 temperature=0.3,
                 max_tokens=2000
             )
@@ -221,6 +242,67 @@ class AIService:
             logger.error(f"OpenAI API error in follow-up: {str(e)}")
             return self._get_mock_followup_response(user_message)
 
+    async def analyze_document(self, file_content: bytes, filename: str, content_type: str) -> Dict:
+        """Analyze uploaded document (floor plan, photo) using AI"""
+        
+        if not self.enabled:
+            return self._get_mock_document_analysis()
+        
+        try:
+            # Convert file content to base64
+            base64_content = base64.b64encode(file_content).decode('utf-8')
+            
+            system_prompt = """Du bist ein Experte für die Analyse von Grundrissen und Fotos von Räumen.
+            Analysiere das Bild und extrahiere relevante Informationen für einen Maler-Kostenvoranschlag.
+
+            Antworte im JSON-Format:
+            {
+                "extracted_text": "string",
+                "detected_rooms": ["string"],
+                "estimated_area": number,
+                "notes": "string",
+                "recommendations": ["string"]
+            }"""
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Bitte analysiere dieses Bild ({filename}) für einen Maler-Kostenvoranschlag."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{content_type};base64,{base64_content}"
+                            }
+                        }
+                    ]
+                }
+            ]
+
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=1000
+            )
+
+            content = response.choices[0].message.content
+            
+            try:
+                result = json.loads(content)
+                return result
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse OpenAI document analysis JSON: {content}")
+                return self._get_mock_document_analysis()
+
+        except Exception as e:
+            logger.error(f"OpenAI API error in document analysis: {str(e)}")
+            return self._get_mock_document_analysis()
+
     def _get_mock_analysis_response(self, description: str) -> Dict:
         """Mock response for testing without OpenAI API"""
         return {
@@ -257,64 +339,62 @@ class AIService:
         }
 
     def _get_mock_quote_response(self, project_data: Dict, answers: List[Dict]) -> Dict:
-        """Mock quote response for testing"""
+        """Mock response for quote generation without OpenAI API"""
         return {
             "quote": {
-                "project_title": project_data.get("project_title", "Malerarbeiten"),
-                "total_amount": 850.50,
-                "labor_hours": 12,
-                "hourly_rate": 45.0,
-                "material_cost": 180.50,
-                "additional_costs": 130.0
+                "project_title": "Wohnzimmer streichen",
+                "total_amount": 1250.00,
+                "labor_hours": 16.0,
+                "hourly_rate": 45.00,
+                "material_cost": 530.00,
+                "additional_costs": 0.00
             },
             "items": [
                 {
-                    "description": "Wände und Decke streichen",
-                    "quantity": 25,
+                    "description": "Wandflächen grundieren und streichen",
+                    "quantity": 25.5,
                     "unit": "m²",
-                    "unit_price": 18.0,
-                    "total_price": 450.0,
+                    "unit_price": 15.00,
+                    "total_price": 382.50,
                     "category": "labor"
                 },
                 {
-                    "description": "Premium-Wandfarbe weiß",
-                    "quantity": 3,
-                    "unit": "Liter",
-                    "unit_price": 35.0,
-                    "total_price": 105.0,
+                    "description": "Premium-Wandfarbe",
+                    "quantity": 2,
+                    "unit": "Eimer",
+                    "unit_price": 45.00,
+                    "total_price": 90.00,
                     "category": "material"
-                },
-                {
-                    "description": "Grundierung und Spachtelmasse",
-                    "quantity": 1,
-                    "unit": "Pauschal",
-                    "unit_price": 75.50,
-                    "total_price": 75.50,
-                    "category": "material"
-                },
-                {
-                    "description": "Anfahrt und Entsorgung",
-                    "quantity": 1,
-                    "unit": "Pauschal",
-                    "unit_price": 130.0,
-                    "total_price": 130.0,
-                    "category": "additional"
                 }
             ],
-            "notes": "Alle Preise inkl. 19% MwSt. Gültig für 30 Tage.",
+            "notes": "Preis inkl. MwSt. Material wird gestellt.",
             "recommendations": [
-                "Empfehlung: Premium-Farbe für bessere Deckkraft",
-                "Tipp: Möbel sollten abgedeckt oder ausgeräumt werden"
+                "Möbel sollten vor Arbeitsbeginn ausgeräumt werden",
+                "Für optimale Ergebnisse empfehlen wir eine Grundierung"
             ]
         }
 
-    def _get_mock_followup_response(self, user_message: str) -> Dict:
-        """Mock follow-up response"""
+    def _get_mock_followup_response(self, message: str) -> Dict:
+        """Mock response for follow-up questions without OpenAI API"""
         return {
-            "response": "Vielen Dank für die Information. Können Sie mir noch sagen, ob spezielle Vorbereitungen nötig sind?",
+            "response": "Vielen Dank für Ihre Antwort. Können Sie mir noch sagen, ob es besondere Wünsche bezüglich der Farbqualität gibt?",
             "needs_more_info": True,
             "suggested_questions": [
-                "Kleinere Ausbesserungen können den Preis beeinflussen."
+                "Möchten Sie eine besonders hochwertige Farbe verwenden?",
+                "Gibt es spezielle Anforderungen an die Haltbarkeit?"
+            ]
+        }
+
+    def _get_mock_document_analysis(self) -> Dict:
+        """Mock response for document analysis without OpenAI API"""
+        return {
+            "extracted_text": "Wohnzimmer, 25m², 2.50m Deckenhöhe",
+            "detected_rooms": ["Wohnzimmer"],
+            "estimated_area": 25,
+            "notes": "Grundriss zeigt rechteckigen Raum mit Fenster",
+            "recommendations": [
+                "Deckenhöhe berücksichtigen bei Materialberechnung",
+                "Fensterbereich separat kalkulieren"
             ]
         }
 

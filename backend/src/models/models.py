@@ -61,6 +61,10 @@ class Quote(Base):
     status = Column(String(20), default="draft")  # draft, completed, sent, accepted, rejected
     ai_processing_status = Column(String(20), default="pending")  # pending, processing, completed, failed
     
+    # AI and conversation
+    created_by_ai = Column(Boolean, default=False)  # Whether this quote was created via AI chat
+    conversation_history = Column(Text, nullable=True)  # JSON string of conversation history
+    
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -68,6 +72,7 @@ class Quote(Base):
     # Relationships
     user = relationship("User", back_populates="quotes")
     quote_items = relationship("QuoteItem", back_populates="quote", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="quote")
 
 class QuoteItem(Base):
     __tablename__ = "quote_items"
@@ -89,6 +94,7 @@ class QuoteItem(Base):
     
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relationships
     quote = relationship("Quote", back_populates="quote_items")
@@ -108,11 +114,12 @@ class Document(Base):
     
     # OCR and analysis results
     extracted_text = Column(Text)
-    analysis_result = Column(Text)  # JSON string
+    analysis_result = Column(Text, nullable=True)  # JSON string
     processing_status = Column(String(20), default="pending")  # pending, processing, completed, failed
     
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relationships
     user = relationship("User", back_populates="documents")
@@ -122,6 +129,7 @@ class Payment(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    quote_id = Column(Integer, ForeignKey("quotes.id"), nullable=True)
     
     # Stripe information
     stripe_payment_intent_id = Column(String(200), unique=True)
@@ -140,4 +148,5 @@ class Payment(Base):
     
     # Relationships
     user = relationship("User", back_populates="payments")
+    quote = relationship("Quote", back_populates="payments")
 

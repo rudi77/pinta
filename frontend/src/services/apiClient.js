@@ -5,15 +5,17 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL + '/api';
 
 class ApiClient {
   constructor() {
-    this.token = localStorage.getItem('access_token');
+    // Entfernt: this.token = localStorage.getItem('access_token');
   }
 
   setToken(token) {
-    this.token = token;
+    console.log('setToken called with:', token);
     if (token) {
       localStorage.setItem('access_token', token);
+      console.log('Token saved to localStorage:', token);
     } else {
       localStorage.removeItem('access_token');
+      console.log('Token removed from localStorage');
     }
   }
 
@@ -21,11 +23,11 @@ class ApiClient {
     const headers = {
       'Content-Type': 'application/json',
     };
-    
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+    const token = localStorage.getItem('access_token');
+    console.log('TOKEN IM HEADER:', token);
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
-    
     return headers;
   }
 
@@ -44,7 +46,7 @@ class ApiClient {
       
       if (!response.ok) {
         if (response.status === 401) {
-          // Token expired or invalid
+          console.warn('401 Unauthorized! Token wird entfernt.', { url, config });
           this.setToken(null);
           window.dispatchEvent(new Event('auth:logout'));
           throw new Error('Authentication required');
@@ -67,19 +69,23 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    
+    console.log('LOGIN RESPONSE:', response);
     if (response.access_token) {
+      console.log('SET TOKEN:', response.access_token);
       this.setToken(response.access_token);
+    } else {
+      console.warn('NO ACCESS TOKEN IN LOGIN RESPONSE');
     }
-    
     return response;
   }
 
   async register(userData) {
-    return await this.request('/auth/register', {
+    const response = await this.request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
+    console.log('REGISTER RESPONSE:', response);
+    return response;
   }
 
   async logout() {
@@ -169,6 +175,45 @@ class ApiClient {
   async healthCheck() {
     const response = await fetch('http://localhost:8000/health');
     return await response.json();
+  }
+
+  // AI Analysis
+  async analyzeInput(input) {
+    const response = await this.request('/ai/analyze-input', {
+      method: 'POST',
+      body: JSON.stringify({ input }),
+    });
+    return response;
+  }
+
+  async askQuestion(question, conversationHistory) {
+    const response = await this.request('/ai/ask-question', {
+      method: 'POST',
+      body: JSON.stringify({
+        question,
+        conversation_history: conversationHistory
+      }),
+    });
+    return response;
+  }
+
+  async generateQuoteWithAI(data) {
+    const response = await this.request('/ai/generate-quote', data);
+    return response.data;
+  }
+
+  async uploadDocument(formData) {
+    const response = await this.request('/ai/upload-document', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  }
+
+  async getDocumentStatus(documentId) {
+    const response = await this.request(`/ai/document-status/${documentId}`);
+    return response.data;
   }
 }
 

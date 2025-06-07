@@ -54,6 +54,7 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const response = await apiClient.login(email, password);
+      localStorage.setItem('access_token', response.access_token);
       setIsAuthenticated(true);
       
       // Fetch user data
@@ -100,6 +101,15 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const response = await apiClient.register(userData);
+      // After successful registration, log the user in
+      const loginResponse = await apiClient.login(userData.email, userData.password);
+      localStorage.setItem('access_token', loginResponse.access_token);
+      setIsAuthenticated(true);
+      
+      // Fetch user data
+      const userData = await apiClient.getCurrentUser();
+      setUser(userData);
+      
       return response;
     } catch (err) {
       setError(err.message || 'Registration failed');
