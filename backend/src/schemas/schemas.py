@@ -185,6 +185,7 @@ class DocumentBase(BaseModel):
     file_size: int
     mime_type: str
     processing_status: str = "pending"
+    quote_id: Optional[int] = None
 
 class DocumentCreate(DocumentBase):
     pass

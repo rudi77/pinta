@@ -1,4 +1,94 @@
 
+// Relative Path: alembic\env.py
+from logging.config import fileConfig
+
+from sqlalchemy import engine_from_config
+from sqlalchemy import pool
+
+from alembic import context
+
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+from src.models.models import Base
+from src.core.config import settings
+
+# this is the Alembic Config object, which provides
+# access to the values within the .ini file in use.
+config = context.config
+
+# Interpret the config file for Python logging.
+# This line sets up loggers basically.
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+# add your model's MetaData object here
+# for 'autogenerate' support
+target_metadata = Base.metadata
+
+# other values from the config, defined by the needs of env.py,
+# can be acquired:
+# my_important_option = config.get_main_option("my_important_option")
+# ... etc.
+
+
+def run_migrations_offline() -> None:
+    """Run migrations in 'offline' mode.
+
+    This configures the context with just a URL
+    and not an Engine, though an Engine is acceptable
+    here as well.  By skipping the Engine creation
+    we don't even need a DBAPI to be available.
+
+    Calls to context.execute() here emit the given string to the
+    script output.
+
+    """
+    url = settings.DATABASE_URL
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online() -> None:
+    """Run migrations in 'online' mode.
+
+    In this scenario we need to create an Engine
+    and associate a connection with the context.
+
+    """
+    configuration = config.get_section(config.config_ini_section)
+    configuration["sqlalchemy.url"] = settings.DATABASE_URL
+    connectable = engine_from_config(
+        configuration,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection, target_metadata=target_metadata
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+
+
+
+
 // Relative Path: src\core\database.py
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
@@ -6,7 +96,7 @@ import os
 from typing import AsyncGenerator
 
 # Database URL
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./maler_kostenvoranschlag.db")
+DATABASE_URL = "sqlite+aiosqlite:///./test_maler_kostenvoranschlag.db"
 
 # Create async engine
 engine = create_async_engine(
@@ -146,6 +236,40 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 
 
 
+// Relative Path: src\migrations\versions\add_conversation_history.py
+"""add conversation history
+
+Revision ID: add_conversation_history
+Revises: 
+Create Date: 2024-03-19 16:00:00.000000
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = 'add_conversation_history'
+down_revision: Union[str, None] = None
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    # Add created_by_ai and conversation_history columns to quotes table
+    op.add_column('quotes', sa.Column('created_by_ai', sa.Boolean(), nullable=False, server_default='false'))
+    op.add_column('quotes', sa.Column('conversation_history', sa.Text(), nullable=True))
+
+
+def downgrade() -> None:
+    # Remove created_by_ai and conversation_history columns from quotes table
+    op.drop_column('quotes', 'conversation_history')
+    op.drop_column('quotes', 'created_by_ai') 
+
+
+
 // Relative Path: src\models\models.py
 from sqlalchemy import Column, Integer, String, Float, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
@@ -210,6 +334,10 @@ class Quote(Base):
     status = Column(String(20), default="draft")  # draft, completed, sent, accepted, rejected
     ai_processing_status = Column(String(20), default="pending")  # pending, processing, completed, failed
     
+    # AI and conversation
+    created_by_ai = Column(Boolean, default=False)  # Whether this quote was created via AI chat
+    conversation_history = Column(Text, nullable=True)  # JSON string of conversation history
+    
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -217,6 +345,7 @@ class Quote(Base):
     # Relationships
     user = relationship("User", back_populates="quotes")
     quote_items = relationship("QuoteItem", back_populates="quote", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="quote")
 
 class QuoteItem(Base):
     __tablename__ = "quote_items"
@@ -238,6 +367,7 @@ class QuoteItem(Base):
     
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relationships
     quote = relationship("Quote", back_populates="quote_items")
@@ -257,11 +387,12 @@ class Document(Base):
     
     # OCR and analysis results
     extracted_text = Column(Text)
-    analysis_result = Column(Text)  # JSON string
+    analysis_result = Column(Text, nullable=True)  # JSON string
     processing_status = Column(String(20), default="pending")  # pending, processing, completed, failed
     
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
     # Relationships
     user = relationship("User", back_populates="documents")
@@ -271,6 +402,7 @@ class Payment(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    quote_id = Column(Integer, ForeignKey("quotes.id"), nullable=True)
     
     # Stripe information
     stripe_payment_intent_id = Column(String(200), unique=True)
@@ -289,6 +421,7 @@ class Payment(Base):
     
     # Relationships
     user = relationship("User", back_populates="payments")
+    quote = relationship("Quote", back_populates="payments")
 
 
 
@@ -325,29 +458,46 @@ class User(db.Model):
 
 
 // Relative Path: src\routes\ai.py
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks, Form
 from typing import List, Dict, Any, Optional
 import json
 import logging
 from datetime import datetime
+import os
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
+import asyncio
+import base64
 
 from src.services.ai_service import AIService
+from src.services.pdf_service import PDFService
 from src.core.security import get_current_user
-from src.models.models import User
+from src.models.models import User, Quote, QuoteItem, Document as DocumentModel
 from src.schemas.schemas import (
     AIAnalysisRequest, 
     AIAnalysisResponse,
     AIQuestionResponse,
     AIFollowUpRequest,
     AIQuoteGenerationRequest,
-    AIQuoteGenerationResponse
+    AIQuoteGenerationResponse,
+    AIConversationHistory,
+    DocumentResponse,
+    ErrorResponse
 )
+from src.database import get_db
+from .quotes import generate_quote_number
 
 router = APIRouter(tags=["AI"])
 logger = logging.getLogger(__name__)
 
 # Initialize AI service
 ai_service = AIService()
+
+def default_json(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f"Type {type(obj)} not serializable")
 
 @router.post("/analyze-input", response_model=AIAnalysisResponse)
 async def analyze_project_input(
@@ -358,21 +508,43 @@ async def analyze_project_input(
     try:
         logger.info(f"Analyzing project input for user {current_user.id}")
         
+        # Initialize conversation history if not exists
+        if not request.conversation_history:
+            request.conversation_history = []
+            
+        # Add user's initial input to conversation
+        request.conversation_history.append({
+            "role": "user",
+            "content": request.input,
+            "timestamp": datetime.now().isoformat()
+        })
+        
         result = await ai_service.analyze_project_description(
-            description=request.description,
-            context=request.context or "initial_input"
+            description=request.input,
+            context=getattr(request, 'context', None) or "initial_input",
+            conversation_history=request.conversation_history
         )
         
+        # Add AI's response to conversation
+        request.conversation_history.append({
+            "role": "assistant",
+            "content": json.dumps(result),
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        print(result)
+
         return AIAnalysisResponse(
             analysis=result.get("analysis", {}),
             questions=result.get("questions", []),
             suggestions=result.get("suggestions", []),
+            conversation_history=request.conversation_history,
             success=True
         )
         
     except Exception as e:
         logger.error(f"Error analyzing project input: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to analyze project input")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/ask-question", response_model=AIQuestionResponse)
 async def ask_follow_up_question(
@@ -383,52 +555,189 @@ async def ask_follow_up_question(
     try:
         logger.info(f"Processing follow-up question for user {current_user.id}")
         
+        # Add user's question to conversation
+        request.conversation_history.append({
+            "role": "user",
+            "content": request.question,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        # conversation_history in dicts umwandeln
+        history = [msg.model_dump() if hasattr(msg, 'model_dump') else dict(msg) for msg in request.conversation_history]
+        
         result = await ai_service.ask_follow_up_question(
-            conversation_history=request.conversation_history,
-            user_message=request.message
+            conversation_history=history,
+            user_message=request.question
         )
+        
+        # Add AI's response to conversation
+        request.conversation_history.append({
+            "role": "assistant",
+            "content": result.get("response", ""),
+            "timestamp": datetime.now().isoformat()
+        })
         
         return AIQuestionResponse(
             response=result.get("response", ""),
             needs_more_info=result.get("needs_more_info", False),
             suggested_questions=result.get("suggested_questions", []),
+            conversation_history=request.conversation_history,
             success=True
         )
         
     except Exception as e:
         logger.error(f"Error processing follow-up question: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to process question")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/generate-quote", response_model=AIQuoteGenerationResponse)
 async def generate_quote_with_ai(
     request: AIQuoteGenerationRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """Generate a detailed quote based on project data and user answers"""
     try:
         logger.info(f"Generating AI quote for user {current_user.id}")
-        
+        print("STEP 1: Starte generate_quote_with_ai")
+        # conversation_history in dicts umwandeln
+        history = [msg.model_dump() if hasattr(msg, 'model_dump') else dict(msg) for msg in request.conversation_history] if request.conversation_history else None
+        print("STEP 2: Nach history umwandeln")
+
+        # Dokumente laden und als base64 encodieren
+        quote_id = request.project_data.get('quote_id') if request.project_data else None
+        document_files = []
+        if quote_id:
+            result = await db.execute(
+                select(DocumentModel)
+                .where(DocumentModel.quote_id == quote_id)
+                .where(DocumentModel.user_id == current_user.id)
+            )
+            documents = result.scalars().all()
+            for doc in documents:
+                try:
+                    with open(doc.file_path, "rb") as f:
+                        file_bytes = f.read()
+                        encoded = base64.b64encode(file_bytes).decode('utf-8')
+                        document_files.append({
+                            "filename": doc.filename,
+                            "mime_type": doc.mime_type,
+                            "base64": encoded
+                        })
+                except Exception as e:
+                    logger.error(f"Error reading document file {doc.file_path}: {str(e)}")
+        print(f"STEP 2b: Dokumente als base64 geladen: {len(document_files)}")
+
         result = await ai_service.process_answers_and_generate_quote(
             project_data=request.project_data,
-            answers=request.answers
+            answers=request.answers,
+            conversation_history=history,
+            document_files=document_files
         )
-        
+        print("STEP 3: Nach KI-Quote-Generierung")
+        # Create quote in database
+        quote_number = generate_quote_number()
+        print("STEP 4: Nach generate_quote_number")
+        # Create quote
+        quote = Quote(
+            quote_number=quote_number,
+            user_id=current_user.id,
+            customer_name=request.customer_name,
+            customer_email=request.customer_email,
+            customer_phone=request.customer_phone,
+            customer_address=request.customer_address,
+            project_title=result["quote"]["project_title"],
+            project_description=result["quote"].get("project_description"),
+            status="draft",
+            ai_processing_status="completed",
+            created_by_ai=True,
+            conversation_history=json.dumps(history, default=default_json) if history is not None else None
+        )
+        print("STEP 5: Nach Quote-Objekt-Erstellung")
+        db.add(quote)
+        await db.flush()
+        print("STEP 6: Nach db.flush()")
+        # Add quote items
+        total_amount = 0.0
+        quote_items_dicts = []
+        for idx, item in enumerate(result["items"], start=1):
+            quote_item = QuoteItem(
+                quote_id=quote.id,
+                position=item.get("position", idx),
+                description=item["description"],
+                quantity=item["quantity"],
+                unit=item["unit"],
+                unit_price=item["unit_price"],
+                total_price=item["total_price"],
+                room_name=item.get("room_name"),
+                area_sqm=item.get("area_sqm"),
+                work_type=item.get("work_type")
+            )
+            db.add(quote_item)
+            total_amount += item["total_price"]
+            quote_items_dicts.append({
+                "id": quote_item.id,
+                "quote_id": quote_item.quote_id,
+                "position": quote_item.position,
+                "description": quote_item.description,
+                "quantity": quote_item.quantity,
+                "unit": quote_item.unit,
+                "unit_price": quote_item.unit_price,
+                "total_price": quote_item.total_price,
+                "room_name": quote_item.room_name,
+                "created_at": quote_item.created_at,
+                "updated_at": quote_item.updated_at
+            })
+        print("STEP 7: Nach Hinzufügen der QuoteItems")
+        # Update quote with total amount
+        quote.total_amount = total_amount
+        print("STEP 8: Nach Setzen von total_amount")
+        await db.commit()
+        print("STEP 9: Nach db.commit()")
+        pdf_data = {
+            "quote_number": quote.quote_number,
+            "customer_name": quote.customer_name,
+            "customer_email": quote.customer_email,
+            "customer_phone": quote.customer_phone,
+            "customer_address": quote.customer_address,
+            "project_title": quote.project_title,
+            "project_description": quote.project_description,
+            "quote_items": quote_items_dicts
+        }
+        print(f"STEP 10: pdf_data: {pdf_data}")
+        # Jetzt PDF-Generierung im Threadpool
+        pdf_service = PDFService()
+        pdf_result = await asyncio.to_thread(pdf_service.generate_quote_pdf, pdf_data)
+        print("STEP 11: Nach PDF-Generierung")
+        # Add final quote generation to conversation
+        if request.conversation_history:
+            request.conversation_history.append({
+                "role": "assistant",
+                "content": "Kostenvoranschlag wurde erstellt und als PDF gespeichert",
+                "timestamp": datetime.now().isoformat()
+            })
+        print("STEP 12: Nach Hinzufügen zur conversation_history")
         return AIQuoteGenerationResponse(
             quote=result.get("quote", {}),
-            items=result.get("items", []),
+            items=quote_items_dicts,  # Use the complete quote items with all fields
             notes=result.get("notes", ""),
             recommendations=result.get("recommendations", []),
-            success=True
+            conversation_history=request.conversation_history,
+            total_amount=quote.total_amount,
+            success=True,
+            pdf_url=pdf_result.get("pdf_url") if pdf_result.get("success") else None
         )
+        print("STEP 13: Nach Response")
         
     except Exception as e:
         logger.error(f"Error generating AI quote: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to generate quote")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/upload-document")
+@router.post("/upload-document", response_model=DocumentResponse)
 async def upload_document_for_analysis(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    quote_id: Optional[int] = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """Upload and analyze documents (PDFs, images) for project information"""
     try:
@@ -445,20 +754,73 @@ async def upload_document_for_analysis(
         # Read file content
         content = await file.read()
         
-        # For now, return a mock response
-        # In production, you would implement OCR and document analysis
-        return {
-            "success": True,
-            "filename": file.filename,
-            "size": len(content),
-            "analysis": {
-                "extracted_text": "Mock extracted text from document",
-                "detected_rooms": ["Wohnzimmer", "Küche"],
-                "estimated_area": 45,
-                "notes": "Document analysis is currently in development"
-            },
-            "message": "Document uploaded successfully. Analysis feature coming soon."
-        }
+        # Create upload directory if it doesn't exist
+        upload_dir = os.path.join("uploads", str(current_user.id))
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_filename = f"{timestamp}_{file.filename}"
+        file_path = os.path.join(upload_dir, safe_filename)
+        
+        # Save file
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        # Create document record
+        document = DocumentModel(
+            user_id=current_user.id,
+            filename=safe_filename,
+            original_filename=file.filename,
+            file_path=file_path,
+            file_size=len(content),
+            mime_type=file.content_type,
+            processing_status="processing",
+            quote_id=quote_id
+        )
+        
+        db.add(document)
+        await db.commit()
+        await db.refresh(document)
+        
+        # Analyze document in background
+        try:
+            analysis_result = await ai_service.analyze_document(
+                file_content=content,
+                filename=file.filename,
+                content_type=file.content_type
+            )
+            
+            # Update document with analysis results
+            document.extracted_text = analysis_result.get("extracted_text")
+            document.analysis_result = json.dumps(analysis_result)
+            document.processing_status = "completed"
+            
+            await db.commit()
+            await db.refresh(document)
+            
+        except Exception as e:
+            logger.error(f"Error analyzing document: {str(e)}")
+            document.processing_status = "failed"
+            await db.commit()
+            await db.refresh(document)
+        
+        # Erstelle das Response-Objekt explizit aus den Attributen
+        resp = DocumentResponse(
+            id=document.id,
+            user_id=document.user_id,
+            filename=document.filename,
+            original_filename=document.original_filename,
+            file_path=document.file_path,
+            file_size=document.file_size,
+            mime_type=document.mime_type,
+            processing_status=document.processing_status,
+            quote_id=document.quote_id,
+            created_at=document.created_at,
+            updated_at=document.updated_at,
+            analysis_result=json.loads(document.analysis_result) if document.analysis_result else None
+        )
+        return resp
         
     except HTTPException:
         raise
@@ -494,7 +856,7 @@ async def get_conversation_history(
         
     except Exception as e:
         logger.error(f"Error fetching conversation history: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to fetch conversation history")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/ai-status")
 async def get_ai_status():
@@ -506,11 +868,41 @@ async def get_ai_status():
             "project_analysis": True,
             "question_generation": True,
             "quote_generation": True,
-            "document_analysis": False,  # Coming soon
+            "document_analysis": True,  # Now enabled
             "conversation_memory": True
         },
         "status": "operational" if ai_service.enabled else "mock_mode"
     }
+
+@router.get("/document-status/{document_id}", response_model=DocumentResponse)
+async def get_document_status(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get the status and analysis results of an uploaded document"""
+    try:
+        # Get document
+        result = await db.execute(
+            select(DocumentModel)
+            .where(DocumentModel.id == document_id)
+            .where(DocumentModel.user_id == current_user.id)
+        )
+        document = result.scalar_one_or_none()
+        
+        if not document:
+            raise HTTPException(
+                status_code=404,
+                detail="Document not found"
+            )
+        
+        return document
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document status: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get document status")
 
 
 
@@ -546,8 +938,8 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    username: str = payload.get("sub")
-    if username is None:
+    email: str = payload.get("sub")
+    if email is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
@@ -555,7 +947,7 @@ async def get_current_user(
         )
     
     # Get user from database
-    result = await db.execute(select(User).where(User.username == username))
+    result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     
     if user is None:
@@ -570,6 +962,9 @@ async def get_current_user(
 @router.post("/register", response_model=SuccessResponse)
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """Register a new user"""
+    
+    # Log the incoming request data
+    print("Registration request data:", user_data.dict())
     
     # Check if user already exists
     result = await db.execute(
@@ -602,7 +997,7 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     
     return SuccessResponse(message="User registered successfully")
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
     """Authenticate user and return access token"""
     
@@ -617,10 +1012,10 @@ async def login(login_data: LoginRequest, db: AsyncSession = Depends(get_db)):
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Create access token
-    access_token = create_access_token(data={"sub": user.username})
+    # Create access token with email as sub
+    access_token = create_access_token(data={"sub": user.email})
     
-    return Token(access_token=access_token, token_type="bearer")
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
@@ -868,6 +1263,7 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
 import uuid
+import json
 
 from src.core.database import get_db
 from src.routes.auth import get_current_user
@@ -914,6 +1310,41 @@ async def check_user_quota(user: User, db: AsyncSession) -> bool:
     await db.commit()
     return True
 
+def quote_to_response(quote):
+    return {
+        "id": quote.id,
+        "quote_number": quote.quote_number,
+        "user_id": quote.user_id,
+        "customer_name": quote.customer_name,
+        "customer_email": quote.customer_email,
+        "customer_phone": quote.customer_phone,
+        "customer_address": quote.customer_address,
+        "project_title": quote.project_title,
+        "project_description": quote.project_description or "",
+        "total_amount": quote.total_amount,
+        "status": quote.status,
+        "created_by_ai": quote.created_by_ai,
+        "conversation_history": json.loads(quote.conversation_history) if quote.conversation_history else [],
+        "items": [
+            {
+                "id": item.id,
+                "quote_id": item.quote_id,
+                "position": item.position,
+                "description": item.description,
+                "quantity": item.quantity,
+                "unit": item.unit,
+                "unit_price": item.unit_price,
+                "total_price": item.total_price,
+                "room_name": item.room_name,
+                "created_at": item.created_at,
+                "updated_at": item.updated_at
+            }
+            for item in quote.quote_items
+        ],
+        "created_at": quote.created_at,
+        "updated_at": quote.updated_at,
+    }
+
 @router.get("/", response_model=List[QuoteResponse])
 async def get_quotes(
     status_filter: Optional[str] = None,
@@ -934,7 +1365,7 @@ async def get_quotes(
     result = await db.execute(query)
     quotes = result.scalars().all()
     
-    return quotes
+    return [quote_to_response(q) for q in quotes]
 
 @router.post("/", response_model=QuoteResponse)
 async def create_quote(
@@ -954,6 +1385,11 @@ async def create_quote(
     # Create quote
     quote_number = generate_quote_number()
     
+    # Convert conversation history to JSON string if present
+    conversation_history = None
+    if quote_data.conversation_history:
+        conversation_history = json.dumps([msg.model_dump() for msg in quote_data.conversation_history])
+    
     quote = Quote(
         quote_number=quote_number,
         user_id=current_user.id,
@@ -964,7 +1400,9 @@ async def create_quote(
         project_title=quote_data.project_title,
         project_description=quote_data.project_description,
         status="draft",
-        ai_processing_status="pending"
+        ai_processing_status="pending",
+        created_by_ai=quote_data.created_by_ai,
+        conversation_history=conversation_history
     )
     
     db.add(quote)
@@ -1011,29 +1449,21 @@ async def get_quote(
     db: AsyncSession = Depends(get_db)
 ):
     """Get specific quote"""
-    
     result = await db.execute(
         select(Quote)
         .where(Quote.id == quote_id)
         .where(Quote.user_id == current_user.id)
+        .options(selectinload(Quote.quote_items))
     )
     quote = result.scalar_one_or_none()
-    
+
     if not quote:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Quote not found"
         )
-    
-    # Load quote items
-    items_result = await db.execute(
-        select(QuoteItem)
-        .where(QuoteItem.quote_id == quote.id)
-        .order_by(QuoteItem.position)
-    )
-    quote.quote_items = items_result.scalars().all()
-    
-    return quote
+
+    return quote_to_response(quote)
 
 @router.put("/{quote_id}", response_model=QuoteResponse)
 async def update_quote(
@@ -1059,6 +1489,13 @@ async def update_quote(
     
     # Update quote
     update_data = quote_update.model_dump(exclude_unset=True)
+    
+    # Convert conversation history to JSON string if present
+    if "conversation_history" in update_data:
+        update_data["conversation_history"] = json.dumps(
+            [msg.model_dump() for msg in update_data["conversation_history"]]
+        )
+    
     if update_data:
         await db.execute(
             update(Quote)
@@ -1549,225 +1986,227 @@ async def get_user_quota(current_user: User = Depends(get_current_user)):
 
 
 // Relative Path: src\schemas\schemas.py
-from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from enum import Enum
 
-# User Schemas
+# Base Models
 class UserBase(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
+    username: str
     company_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
-
-class UserCreate(UserBase):
-    password: str = Field(..., min_length=6)
-
-class UserUpdate(BaseModel):
-    username: Optional[str] = None
-    email: Optional[EmailStr] = None
-    company_name: Optional[str] = None
-    phone: Optional[str] = None
-    address: Optional[str] = None
-
-class UserResponse(UserBase):
-    id: int
-    is_premium: bool
-    premium_until: Optional[datetime]
-    quotes_this_month: int
-    additional_quotes: int
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-# Auth schemas
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-# Quote schemas
-class QuoteItemBase(BaseModel):
-    position: int
-    description: str
-    quantity: float
-    unit: str
-    unit_price: float
-    total_price: float
-    room_name: Optional[str] = None
-    area_sqm: Optional[float] = None
-    work_type: Optional[str] = None
-
-class QuoteItemCreate(QuoteItemBase):
-    pass
-
-class QuoteItemResponse(QuoteItemBase):
-    id: int
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
 
 class QuoteBase(BaseModel):
-    customer_name: str = Field(..., min_length=1, max_length=100)
-    customer_email: Optional[EmailStr] = None
-    customer_phone: Optional[str] = None
-    customer_address: Optional[str] = None
-    project_title: str = Field(..., min_length=1, max_length=200)
-    project_description: Optional[str] = None
+    customer_name: str
+    project_title: str
+    project_description: str
+    total_amount: float
+    status: str = "draft"
+    created_by_ai: bool = False
+    conversation_history: Optional[str] = None
 
-class QuoteCreate(QuoteBase):
-    quote_items: List[QuoteItemCreate] = []
-
-class QuoteUpdate(BaseModel):
-    customer_name: Optional[str] = None
-    customer_email: Optional[EmailStr] = None
-    customer_phone: Optional[str] = None
-    customer_address: Optional[str] = None
-    project_title: Optional[str] = None
-    project_description: Optional[str] = None
-    status: Optional[str] = None
-
-class QuoteResponse(QuoteBase):
-    id: int
-    quote_number: str
-    total_amount: Optional[float]
-    labor_hours: Optional[float]
-    hourly_rate: Optional[float]
-    material_cost: Optional[float]
-    additional_costs: Optional[float]
-    status: str
-    ai_processing_status: str
-    created_at: datetime
-    updated_at: datetime
-    quote_items: List[QuoteItemResponse] = []
-    
-    class Config:
-        from_attributes = True
-
-# AI schemas
-class AIAnalysisRequest(BaseModel):
-    input_text: str = Field(..., min_length=1)
-    context: Optional[str] = "initial_input"
-
-class AIAnalysisResponse(BaseModel):
-    success: bool
-    confidence: float
-    extracted_data: dict
-    questions: List[str]
-    suggested_items: List[dict]
-
-# Document schemas
-class DocumentResponse(BaseModel):
-    id: int
-    filename: str
-    original_filename: str
-    file_size: Optional[int]
-    mime_type: Optional[str]
-    extracted_text: Optional[str]
-    analysis_result: Optional[str]
-    processing_status: str
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-# Payment schemas
-class PaymentCreate(BaseModel):
-    amount: float
-    payment_type: str
-    description: Optional[str] = None
-
-class PaymentResponse(BaseModel):
-    id: int
-    amount: float
-    currency: str
-    status: str
-    payment_type: str
-    description: Optional[str]
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-# Generic response schemas
-class SuccessResponse(BaseModel):
-    success: bool = True
-    message: str
-
-class ErrorResponse(BaseModel):
-    success: bool = False
-    error: str
-    detail: Optional[str] = None
-
-
-# AI Schemas
-class AIAnalysisRequest(BaseModel):
+class QuoteItemBase(BaseModel):
     description: str
-    context: Optional[str] = "initial_input"
+    quantity: float
+    unit_price: float
+    total_price: float
 
-class AIQuestion(BaseModel):
-    id: str
-    question: str
-    type: str  # "multiple_choice", "text", "number"
-    options: Optional[List[str]] = None
+class PaymentBase(BaseModel):
+    amount: float
+    status: str
+    payment_method: str
+
+# Error Models
+class ErrorResponse(BaseModel):
+    detail: str
+    code: Optional[str] = None
+
+# AI Models
+class AIConversationMessage(BaseModel):
+    role: str
+    content: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+class AIConversationHistory(BaseModel):
+    messages: List[AIConversationMessage]
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class AIAnalysisRequest(BaseModel):
+    input: str
+    conversation_history: Optional[List[AIConversationMessage]] = None
 
 class AIAnalysisResponse(BaseModel):
     analysis: Dict[str, Any]
-    questions: List[AIQuestion]
+    questions: List[Dict[str, Any]]
     suggestions: List[str]
-    success: bool = True
+    conversation_history: List[AIConversationMessage]
 
 class AIFollowUpRequest(BaseModel):
-    message: str
-    conversation_history: List[Dict[str, Any]] = []
+    question: str
+    conversation_history: List[AIConversationMessage]
 
 class AIQuestionResponse(BaseModel):
     response: str
     needs_more_info: bool
-    suggested_questions: List[str] = []
-    success: bool = True
+    conversation_history: List[AIConversationMessage]
+
+class GenerateQuoteAIRequest(BaseModel):
+    project_data: Dict[str, Any]
+    answers: List[Dict[str, Any]]
+    conversation_history: List[AIConversationMessage]
 
 class AIQuoteGenerationRequest(BaseModel):
     project_data: Dict[str, Any]
     answers: List[Dict[str, Any]]
-
-class GenerateQuoteAIRequest(BaseModel):
-    project_description: str = Field(..., min_length=1)
-
-class AIQuoteItem(BaseModel):
-    description: str
-    quantity: float
-    unit: str
-    unit_price: float
-    total_price: float
-    category: str
-
-class AIQuoteData(BaseModel):
-    project_title: str
-    total_amount: float
-    labor_hours: float
-    hourly_rate: float
-    material_cost: float
-    additional_costs: float
+    conversation_history: List[AIConversationMessage]
+    customer_name: str
+    customer_address: str
+    customer_email: str
+    customer_phone: str
 
 class AIQuoteGenerationResponse(BaseModel):
-    quote: AIQuoteData
-    items: List[AIQuoteItem]
-    notes: str
-    recommendations: List[str]
-    success: bool = True
+    quote: Dict[str, Any]
+    items: List[Dict[str, Any]]
+    total_amount: float
+    conversation_history: List[AIConversationMessage]
+    pdf_url: Optional[str] = None
 
+# Create Models
+class UserCreate(UserBase):
+    password: str
 
+class QuoteCreate(QuoteBase):
+    items: List[QuoteItemBase]
+    conversation_history: Optional[List[AIConversationMessage]] = None
+
+class QuoteItemCreate(QuoteItemBase):
+    pass
+
+class PaymentCreate(PaymentBase):
+    quote_id: int
+
+# Update Models
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+
+class QuoteUpdate(QuoteBase):
+    items: Optional[List[QuoteItemBase]] = None
+    conversation_history: Optional[List[AIConversationMessage]] = None
+
+class QuoteItemUpdate(QuoteItemBase):
+    pass
+
+class PaymentUpdate(PaymentBase):
+    pass
+
+# Response Models
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+    company_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    is_premium: bool = False
+    premium_until: Optional[datetime] = None
+    quotes_this_month: int = 0
+    additional_quotes: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class QuoteItemResponse(QuoteItemBase):
+    id: int
+    quote_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class QuoteResponse(QuoteBase):
+    id: int
+    quote_number: str
+    user_id: int
+    items: List[QuoteItemResponse]
+    created_at: datetime
+    updated_at: datetime
+    created_by_ai: bool
+    conversation_history: Optional[List[AIConversationMessage]] = None
+
+    class Config:
+        from_attributes = True
+
+class PaymentResponse(PaymentBase):
+    id: int
+    quote_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Auth Models
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class SuccessResponse(BaseModel):
+    message: str
+
+# Document Models
+class DocumentBase(BaseModel):
+    filename: str
+    original_filename: str
+    file_path: str
+    file_size: int
+    mime_type: str
+    processing_status: str = "pending"
+    quote_id: Optional[int] = None
+
+class DocumentCreate(DocumentBase):
+    pass
+
+class DocumentUpdate(BaseModel):
+    processing_status: Optional[str] = None
+    analysis_result: Optional[Dict[str, Any]] = None
+
+class DocumentResponse(DocumentBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: datetime
+    analysis_result: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
+
+class Document(BaseModel):
+    id: int
+    user_id: int
+    filename: str
+    original_filename: str
+    file_path: str
+    file_size: int
+    mime_type: str
+    processing_status: str
+    analysis_result: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True 
 
 
 
@@ -1786,6 +2225,7 @@ import asyncio
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import logging
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -1794,7 +2234,7 @@ class AIService:
         api_key = os.getenv('OPENAI_API_KEY')
         if api_key and api_key != 'test_key_placeholder' and api_key.startswith('sk-'):
             self.client = openai.AsyncOpenAI(api_key=api_key)
-            self.model = "gpt-4o"
+            self.model = "gpt-4.1-mini"
             self.enabled = True
             logger.info("OpenAI client initialized successfully")
         else:
@@ -1803,7 +2243,7 @@ class AIService:
             self.enabled = False
             logger.warning("OpenAI API key not configured, using mock responses")
 
-    async def analyze_project_description(self, description: str, context: str = "initial_input") -> Dict:
+    async def analyze_project_description(self, description: str, context: str = "initial_input", conversation_history: Optional[List[Dict]] = None) -> Dict:
         """Analyze project description and generate intelligent follow-up questions"""
         
         if not self.enabled:
@@ -1840,18 +2280,28 @@ class AIService:
                 "suggestions": ["hilfreiche Tipps für den Kunden"]
             }"""
 
-            user_prompt = f"""Projektbeschreibung: {description}
-
-            Kontext: {context}
+            # Build conversation context
+            messages = [{"role": "system", "content": system_prompt}]
             
-            Bitte analysiere diese Beschreibung und stelle intelligente Rückfragen."""
+            if conversation_history:
+                for msg in conversation_history[-5:]:  # Last 5 messages for context
+                    messages.append({
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", "")
+                    })
+            
+            messages.append({
+                "role": "user",
+                "content": f"""Projektbeschreibung: {description}
+
+                Kontext: {context}
+                
+                Bitte analysiere diese Beschreibung und stelle intelligente Rückfragen."""
+            })
 
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
+                messages=messages,
                 temperature=0.7,
                 max_tokens=1500
             )
@@ -1862,7 +2312,6 @@ class AIService:
             try:
                 # remove '''json ''' from content
                 content = content.replace('```json', '').replace('```', '')
-                print(content)
                 result = json.loads(content)
                 return result
             except json.JSONDecodeError:
@@ -1875,16 +2324,17 @@ class AIService:
 
     async def process_answers_and_generate_quote(self, 
                                                 project_data: Dict, 
-                                                answers: List[Dict]) -> Dict:
-        """Process user answers and generate a detailed quote"""
+                                                answers: List[Dict],
+                                                conversation_history: Optional[List[Dict]] = None,
+                                                document_files: Optional[List[Dict]] = None) -> Dict:
+        """Process user answers and generate a detailed quote, including multimodal document files as base64."""
         
         if not self.enabled:
             return self._get_mock_quote_response(project_data, answers)
         
         try:
             system_prompt = """Du bist ein erfahrener Maler-Meister und erstellst präzise Kostenvoranschläge.
-            Basierend auf der Projektbeschreibung und den Antworten des Kunden, erstelle einen detaillierten 
-            Kostenvoranschlag mit realistischen Preisen für den deutschen Markt.
+            Basierend auf der Projektbeschreibung, den Antworten des Kunden und den angehängten Dokumenten (Pläne, Fotos), erstelle einen detaillierten Kostenvoranschlag mit realistischen Preisen für den deutschen Markt.
 
             Berücksichtige:
             - Materialkosten (Farbe, Grundierung, Werkzeug)
@@ -1892,6 +2342,7 @@ class AIService:
             - Schwierigkeitsgrad und Zugänglichkeit
             - Regionale Preisunterschiede (Deutschland)
             - Mehrwertsteuer (19%)
+            - Die Inhalte und Hinweise aus den hochgeladenen Dokumenten
 
             Antworte im JSON-Format:
             {
@@ -1917,20 +2368,38 @@ class AIService:
                 "recommendations": ["string"]
             }"""
 
-            user_prompt = f"""Projektdaten:
-            {json.dumps(project_data, indent=2, ensure_ascii=False)}
-
-            Kundenantworten:
-            {json.dumps(answers, indent=2, ensure_ascii=False)}
-
-            Erstelle einen detaillierten Kostenvoranschlag."""
+            # Build conversation context
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            if conversation_history:
+                for msg in conversation_history[-5:]:  # Last 5 messages for context
+                    messages.append({
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", "")
+                    })
+            
+            # Haupt-User-Message mit Projektdaten und Antworten
+            user_content = [
+                {"type": "text", "text": f"Projektdaten:\n{json.dumps(project_data, indent=2, ensure_ascii=False)}\n\nKundenantworten:\n{json.dumps(answers, indent=2, ensure_ascii=False)}\n\nErstelle einen detaillierten Kostenvoranschlag."}
+            ]
+            # Multimodale Dokumente als image_url/base64 anhängen
+            if document_files:
+                for doc in document_files:
+                    if doc.get("base64") and doc.get("mime_type"):
+                        user_content.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{doc['mime_type']};base64,{doc['base64']}"
+                            }
+                        })
+            messages.append({
+                "role": "user",
+                "content": user_content
+            })
 
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
+                messages=messages,
                 temperature=0.3,
                 max_tokens=2000
             )
@@ -2002,6 +2471,67 @@ class AIService:
             logger.error(f"OpenAI API error in follow-up: {str(e)}")
             return self._get_mock_followup_response(user_message)
 
+    async def analyze_document(self, file_content: bytes, filename: str, content_type: str) -> Dict:
+        """Analyze uploaded document (floor plan, photo) using AI"""
+        
+        if not self.enabled:
+            return self._get_mock_document_analysis()
+        
+        try:
+            # Convert file content to base64
+            base64_content = base64.b64encode(file_content).decode('utf-8')
+            
+            system_prompt = """Du bist ein Experte für die Analyse von Grundrissen und Fotos von Räumen.
+            Analysiere das Bild und extrahiere relevante Informationen für einen Maler-Kostenvoranschlag.
+
+            Antworte im JSON-Format:
+            {
+                "extracted_text": "string",
+                "detected_rooms": ["string"],
+                "estimated_area": number,
+                "notes": "string",
+                "recommendations": ["string"]
+            }"""
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"Bitte analysiere dieses Bild ({filename}) für einen Maler-Kostenvoranschlag."
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{content_type};base64,{base64_content}"
+                            }
+                        }
+                    ]
+                }
+            ]
+
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=1000
+            )
+
+            content = response.choices[0].message.content
+            
+            try:
+                result = json.loads(content)
+                return result
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse OpenAI document analysis JSON: {content}")
+                return self._get_mock_document_analysis()
+
+        except Exception as e:
+            logger.error(f"OpenAI API error in document analysis: {str(e)}")
+            return self._get_mock_document_analysis()
+
     def _get_mock_analysis_response(self, description: str) -> Dict:
         """Mock response for testing without OpenAI API"""
         return {
@@ -2038,64 +2568,62 @@ class AIService:
         }
 
     def _get_mock_quote_response(self, project_data: Dict, answers: List[Dict]) -> Dict:
-        """Mock quote response for testing"""
+        """Mock response for quote generation without OpenAI API"""
         return {
             "quote": {
-                "project_title": project_data.get("project_title", "Malerarbeiten"),
-                "total_amount": 850.50,
-                "labor_hours": 12,
-                "hourly_rate": 45.0,
-                "material_cost": 180.50,
-                "additional_costs": 130.0
+                "project_title": "Wohnzimmer streichen",
+                "total_amount": 1250.00,
+                "labor_hours": 16.0,
+                "hourly_rate": 45.00,
+                "material_cost": 530.00,
+                "additional_costs": 0.00
             },
             "items": [
                 {
-                    "description": "Wände und Decke streichen",
-                    "quantity": 25,
+                    "description": "Wandflächen grundieren und streichen",
+                    "quantity": 25.5,
                     "unit": "m²",
-                    "unit_price": 18.0,
-                    "total_price": 450.0,
+                    "unit_price": 15.00,
+                    "total_price": 382.50,
                     "category": "labor"
                 },
                 {
-                    "description": "Premium-Wandfarbe weiß",
-                    "quantity": 3,
-                    "unit": "Liter",
-                    "unit_price": 35.0,
-                    "total_price": 105.0,
+                    "description": "Premium-Wandfarbe",
+                    "quantity": 2,
+                    "unit": "Eimer",
+                    "unit_price": 45.00,
+                    "total_price": 90.00,
                     "category": "material"
-                },
-                {
-                    "description": "Grundierung und Spachtelmasse",
-                    "quantity": 1,
-                    "unit": "Pauschal",
-                    "unit_price": 75.50,
-                    "total_price": 75.50,
-                    "category": "material"
-                },
-                {
-                    "description": "Anfahrt und Entsorgung",
-                    "quantity": 1,
-                    "unit": "Pauschal",
-                    "unit_price": 130.0,
-                    "total_price": 130.0,
-                    "category": "additional"
                 }
             ],
-            "notes": "Alle Preise inkl. 19% MwSt. Gültig für 30 Tage.",
+            "notes": "Preis inkl. MwSt. Material wird gestellt.",
             "recommendations": [
-                "Empfehlung: Premium-Farbe für bessere Deckkraft",
-                "Tipp: Möbel sollten abgedeckt oder ausgeräumt werden"
+                "Möbel sollten vor Arbeitsbeginn ausgeräumt werden",
+                "Für optimale Ergebnisse empfehlen wir eine Grundierung"
             ]
         }
 
-    def _get_mock_followup_response(self, user_message: str) -> Dict:
-        """Mock follow-up response"""
+    def _get_mock_followup_response(self, message: str) -> Dict:
+        """Mock response for follow-up questions without OpenAI API"""
         return {
-            "response": "Vielen Dank für die Information. Können Sie mir noch sagen, ob spezielle Vorbereitungen nötig sind?",
+            "response": "Vielen Dank für Ihre Antwort. Können Sie mir noch sagen, ob es besondere Wünsche bezüglich der Farbqualität gibt?",
             "needs_more_info": True,
             "suggested_questions": [
-                "Kleinere Ausbesserungen können den Preis beeinflussen."
+                "Möchten Sie eine besonders hochwertige Farbe verwenden?",
+                "Gibt es spezielle Anforderungen an die Haltbarkeit?"
+            ]
+        }
+
+    def _get_mock_document_analysis(self) -> Dict:
+        """Mock response for document analysis without OpenAI API"""
+        return {
+            "extracted_text": "Wohnzimmer, 25m², 2.50m Deckenhöhe",
+            "detected_rooms": ["Wohnzimmer"],
+            "estimated_area": 25,
+            "notes": "Grundriss zeigt rechteckigen Raum mit Fenster",
+            "recommendations": [
+                "Deckenhöhe berücksichtigen bei Materialberechnung",
+                "Fensterbereich separat kalkulieren"
             ]
         }
 
@@ -2909,6 +3437,44 @@ class QuotaService:
 # Services package
 
 
+
+
+
+// Relative Path: src\database.py
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.pool import NullPool
+
+# Database URL - using SQLite for development
+DATABASE_URL = "sqlite+aiosqlite:///./test_maler_kostenvoranschlag.db"
+
+# Create async engine
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=True,
+    future=True,
+    poolclass=NullPool  # SQLite doesn't support connection pooling
+)
+
+# Create async session factory
+async_session = sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
+
+# Create base class for models
+Base = declarative_base()
+
+# Dependency to get DB session
+async def get_db() -> AsyncSession:
+    async with async_session() as session:
+        try:
+            yield session
+        finally:
+            await session.close() 
 
 
 

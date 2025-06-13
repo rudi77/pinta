@@ -105,16 +105,16 @@ class AIService:
     async def process_answers_and_generate_quote(self, 
                                                 project_data: Dict, 
                                                 answers: List[Dict],
-                                                conversation_history: Optional[List[Dict]] = None) -> Dict:
-        """Process user answers and generate a detailed quote"""
+                                                conversation_history: Optional[List[Dict]] = None,
+                                                document_files: Optional[List[Dict]] = None) -> Dict:
+        """Process user answers and generate a detailed quote, including multimodal document files as base64."""
         
         if not self.enabled:
             return self._get_mock_quote_response(project_data, answers)
         
         try:
             system_prompt = """Du bist ein erfahrener Maler-Meister und erstellst präzise Kostenvoranschläge.
-            Basierend auf der Projektbeschreibung und den Antworten des Kunden, erstelle einen detaillierten 
-            Kostenvoranschlag mit realistischen Preisen für den deutschen Markt.
+            Basierend auf der Projektbeschreibung, den Antworten des Kunden und den angehängten Dokumenten (Pläne, Fotos), erstelle einen detaillierten Kostenvoranschlag mit realistischen Preisen für den deutschen Markt.
 
             Berücksichtige:
             - Materialkosten (Farbe, Grundierung, Werkzeug)
@@ -122,6 +122,7 @@ class AIService:
             - Schwierigkeitsgrad und Zugänglichkeit
             - Regionale Preisunterschiede (Deutschland)
             - Mehrwertsteuer (19%)
+            - Die Inhalte und Hinweise aus den hochgeladenen Dokumenten
 
             Antworte im JSON-Format:
             {
@@ -157,15 +158,23 @@ class AIService:
                         "content": msg.get("content", "")
                     })
             
+            # Haupt-User-Message mit Projektdaten und Antworten
+            user_content = [
+                {"type": "text", "text": f"Projektdaten:\n{json.dumps(project_data, indent=2, ensure_ascii=False)}\n\nKundenantworten:\n{json.dumps(answers, indent=2, ensure_ascii=False)}\n\nErstelle einen detaillierten Kostenvoranschlag."}
+            ]
+            # Multimodale Dokumente als image_url/base64 anhängen
+            if document_files:
+                for doc in document_files:
+                    if doc.get("base64") and doc.get("mime_type"):
+                        user_content.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{doc['mime_type']};base64,{doc['base64']}"
+                            }
+                        })
             messages.append({
                 "role": "user",
-                "content": f"""Projektdaten:
-                {json.dumps(project_data, indent=2, ensure_ascii=False)}
-
-                Kundenantworten:
-                {json.dumps(answers, indent=2, ensure_ascii=False)}
-
-                Erstelle einen detaillierten Kostenvoranschlag."""
+                "content": user_content
             })
 
             response = await self.client.chat.completions.create(

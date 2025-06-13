@@ -23,6 +23,7 @@ const ChatQuoteWizard = ({ onNavigate }) => {
     customer_email: '',
     customer_phone: ''
   });
+  const [uploadedDocuments, setUploadedDocuments] = useState([]);
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -45,25 +46,38 @@ const ChatQuoteWizard = ({ onNavigate }) => {
     setError(null);
 
     try {
-      // Add file message to chat
-      setMessages(prev => [...prev, {
-        role: 'user',
-        content: `Datei hochgeladen: ${file.name}`,
-        type: 'file',
-        filename: file.name
-      }]);
+      // Debug: Log File-Objekt
+      console.log('File-Objekt:', file);
 
-      // Upload file
+      // Debug: Log FormData Inhalt
       const formData = new FormData();
       formData.append('file', file);
-      
+      if (currentQuote && currentQuote.quote && currentQuote.quote.id) {
+        formData.append('quote_id', currentQuote.quote.id);
+      }
+
+      // Debug: Alle FormData-Einträge loggen
+      for (let pair of formData.entries()) {
+        console.log('FormData:', pair[0], pair[1]);
+      }
+
+      // Debug: Zeige Typ und Größe der Datei
+      console.log('Dateityp:', file.type, 'Dateigröße:', file.size);
+
+      // Upload file
       const response = await apiClient.uploadDocument(formData);
-      
-      // Add AI response to chat
+
+      // Dokument und Analyse im State speichern
+      setUploadedDocuments(prev => [...prev, response]);
+
+      // Add AI response to chat (mit Analyse-Feedback)
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Dokument wurde analysiert. Ich werde die Informationen in die Angebotserstellung einbeziehen.',
-        type: 'text'
+        content: response.analysis_result && response.analysis_result.extracted_text
+          ? `Dokument analysiert: ${response.analysis_result.extracted_text}`
+          : 'Dokument wurde analysiert. Ich werde die Informationen in die Angebotserstellung einbeziehen.',
+        type: 'text',
+        analysis: response.analysis_result
       }]);
 
       // Update conversation history
@@ -73,14 +87,15 @@ const ChatQuoteWizard = ({ onNavigate }) => {
         timestamp: new Date().toISOString()
       }, {
         role: 'assistant',
-        content: 'Dokument wurde analysiert. Ich werde die Informationen in die Angebotserstellung einbeziehen.',
+        content: response.analysis_result && response.analysis_result.extracted_text
+          ? `Dokument analysiert: ${response.analysis_result.extracted_text}`
+          : 'Dokument wurde analysiert. Ich werde die Informationen in die Angebotserstellung einbeziehen.',
         timestamp: new Date().toISOString()
       }]);
 
     } catch (err) {
       console.error('Failed to upload file:', err);
       setError('Fehler beim Hochladen der Datei: ' + (err.message || 'Unbekannter Fehler'));
-      
       // Add error message to chat
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -189,10 +204,15 @@ const ChatQuoteWizard = ({ onNavigate }) => {
     setLoading(true);
     setError(null);
     try {
-      // Generate quote with customer data
+      // Sammle alle Analyse-Resultate der hochgeladenen Dokumente
+      const documentAnalyses = uploadedDocuments
+        .map(doc => doc.analysis_result)
+        .filter(Boolean);
+      // Generate quote with customer data and document analyses
       const quoteData = await apiClient.generateQuoteWithAI({
         project_data: {
-          description: messages.find(m => m.role === 'user')?.content || ''
+          description: messages.find(m => m.role === 'user')?.content || '',
+          document_analyses: documentAnalyses
         },
         answers: conversationHistory.filter(m => m.role === 'user').map(m => ({
           question: m.content,
@@ -203,16 +223,21 @@ const ChatQuoteWizard = ({ onNavigate }) => {
       });
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Kostenvoranschlag wurde erstellt! Sie können ihn jetzt speichern und als PDF herunterladen.',
+        content: 'Kostenvoranschlag wurde erstellt! Sie werden zur Detailansicht weitergeleitet.',
         type: 'text'
       }]);
       setConversationHistory(prev => [...prev, {
         role: 'assistant',
-        content: 'Kostenvoranschlag wurde erstellt! Sie können ihn jetzt speichern und als PDF herunterladen.',
+        content: 'Kostenvoranschlag wurde erstellt! Sie werden zur Detailansicht weitergeleitet.',
         timestamp: new Date().toISOString()
       }]);
       setCurrentQuote(quoteData);
       setShowCustomerForm(false);
+      
+      // Navigate to quote detail view
+      if (onNavigate && quoteData.quote && quoteData.quote.id) {
+        onNavigate(`/quotes/${quoteData.quote.id}`);
+      }
     } catch (err) {
       console.error('Failed to generate quote:', err);
       setError('Fehler beim Erstellen des Kostenvoranschlags: ' + (err.message || 'Unbekannter Fehler'));

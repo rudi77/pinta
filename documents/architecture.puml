@@ -1,0 +1,45 @@
+@startuml
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam ArrowThickness 1
+skinparam defaultFontName "Arial"
+skinparam wrapWidth 200
+skinparam WrapIndent 4
+
+actor "End User" as User
+
+package "Frontend" {
+  [Web App\n(React / Next.js)] as FE
+}
+
+package "Backend - FastAPI" {
+  [API Router] as Router
+  [Security & Auth\n(JWT, Bcrypt)] as Auth
+  [AIService] as AI
+  [PDFService] as PDF
+  [File Uploads\n(Local Storage)] as Files
+  [SQLAlchemy ORM] as ORM
+}
+
+database "SQLite / SQL DB" as DB
+
+cloud "OpenAI\nChat Completion API" as OpenAI
+cloud "Stripe API" as Stripe
+cloud "CraftMyPDF API" as CraftPDF
+
+User --> FE : HTTP(S)
+FE --> Router : REST / JSON
+
+Router --> AI : Analyze description / generate quote
+Router --> PDF : Generate PDF
+Router --> Auth : Verify JWT
+Router --> ORM : DB CRUD
+Router --> Files : Upload / Download
+Router --> Stripe : Checkout Sessions
+
+ORM --> DB
+
+AI --> OpenAI : chat completions
+PDF --> CraftPDF : Template rendering
+
+@enduml

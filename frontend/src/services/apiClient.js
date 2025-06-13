@@ -41,6 +41,13 @@ class ApiClient {
       },
     };
 
+    // Wenn body ein FormData ist, entferne Content-Type (Browser setzt ihn automatisch)
+    if (options.body instanceof FormData) {
+      if (config.headers['Content-Type']) {
+        delete config.headers['Content-Type'];
+      }
+    }
+
     try {
       const response = await fetch(url, config);
       
@@ -207,12 +214,10 @@ class ApiClient {
   }
 
   async uploadDocument(formData) {
-    const response = await this.request('/ai/upload-document', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
+    return await this.request('/ai/upload-document', {
+      method: 'POST',
+      body: formData,
     });
-    return response.data;
   }
 
   async getDocumentStatus(documentId) {

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, BackgroundTasks, Form
 from typing import List, Dict, Any, Optional
 import json
 import logging
@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import uuid
 import asyncio
+import base64
 
 from src.services.ai_service import AIService
 from src.services.pdf_service import PDFService
@@ -22,7 +23,6 @@ from src.schemas.schemas import (
     AIQuoteGenerationResponse,
     AIConversationHistory,
     DocumentResponse,
-    Document,
     ErrorResponse
 )
 from src.database import get_db
@@ -142,10 +142,36 @@ async def generate_quote_with_ai(
         # conversation_history in dicts umwandeln
         history = [msg.model_dump() if hasattr(msg, 'model_dump') else dict(msg) for msg in request.conversation_history] if request.conversation_history else None
         print("STEP 2: Nach history umwandeln")
+
+        # Dokumente laden und als base64 encodieren
+        quote_id = request.project_data.get('quote_id') if request.project_data else None
+        document_files = []
+        if quote_id:
+            result = await db.execute(
+                select(DocumentModel)
+                .where(DocumentModel.quote_id == quote_id)
+                .where(DocumentModel.user_id == current_user.id)
+            )
+            documents = result.scalars().all()
+            for doc in documents:
+                try:
+                    with open(doc.file_path, "rb") as f:
+                        file_bytes = f.read()
+                        encoded = base64.b64encode(file_bytes).decode('utf-8')
+                        document_files.append({
+                            "filename": doc.filename,
+                            "mime_type": doc.mime_type,
+                            "base64": encoded
+                        })
+                except Exception as e:
+                    logger.error(f"Error reading document file {doc.file_path}: {str(e)}")
+        print(f"STEP 2b: Dokumente als base64 geladen: {len(document_files)}")
+
         result = await ai_service.process_answers_and_generate_quote(
             project_data=request.project_data,
             answers=request.answers,
-            conversation_history=history
+            conversation_history=history,
+            document_files=document_files
         )
         print("STEP 3: Nach KI-Quote-Generierung")
         # Create quote in database
@@ -249,6 +275,7 @@ async def generate_quote_with_ai(
 @router.post("/upload-document", response_model=DocumentResponse)
 async def upload_document_for_analysis(
     file: UploadFile = File(...),
+    quote_id: Optional[int] = Form(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -281,14 +308,15 @@ async def upload_document_for_analysis(
             f.write(content)
         
         # Create document record
-        document = Document(
+        document = DocumentModel(
             user_id=current_user.id,
             filename=safe_filename,
             original_filename=file.filename,
             file_path=file_path,
             file_size=len(content),
             mime_type=file.content_type,
-            processing_status="processing"
+            processing_status="processing",
+            quote_id=quote_id
         )
         
         db.add(document)
@@ -317,7 +345,22 @@ async def upload_document_for_analysis(
             await db.commit()
             await db.refresh(document)
         
-        return document
+        # Erstelle das Response-Objekt explizit aus den Attributen
+        resp = DocumentResponse(
+            id=document.id,
+            user_id=document.user_id,
+            filename=document.filename,
+            original_filename=document.original_filename,
+            file_path=document.file_path,
+            file_size=document.file_size,
+            mime_type=document.mime_type,
+            processing_status=document.processing_status,
+            quote_id=document.quote_id,
+            created_at=document.created_at,
+            updated_at=document.updated_at,
+            analysis_result=json.loads(document.analysis_result) if document.analysis_result else None
+        )
+        return resp
         
     except HTTPException:
         raise
@@ -381,9 +424,9 @@ async def get_document_status(
     try:
         # Get document
         result = await db.execute(
-            select(Document)
-            .where(Document.id == document_id)
-            .where(Document.user_id == current_user.id)
+            select(DocumentModel)
+            .where(DocumentModel.id == document_id)
+            .where(DocumentModel.user_id == current_user.id)
         )
         document = result.scalar_one_or_none()
         

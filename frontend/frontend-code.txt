@@ -4887,10 +4887,422 @@ export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
 
 
 
+// Relative Path: src\components\ChatQuoteWizard.jsx
+import React, { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import apiClient from '../services/apiClient';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Card } from './ui/card';
+import { ScrollArea } from './ui/scroll-area';
+import { Loader2, Send, Upload, FileText } from 'lucide-react';
+
+const ChatQuoteWizard = ({ onNavigate }) => {
+  const { user, demoMode, isAuthenticated, loading: authLoading } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [inputValue, setInputValue] = useState('');
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [currentQuote, setCurrentQuote] = useState(null);
+  const [showQuoteButton, setShowQuoteButton] = useState(false);
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [customerData, setCustomerData] = useState({
+    customer_name: '',
+    customer_address: '',
+    customer_email: '',
+    customer_phone: ''
+  });
+  const [uploadedDocuments, setUploadedDocuments] = useState([]);
+  const scrollRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleInputChange = (e) => {
+    setInputValue(e.target.value);
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Debug: Log File-Objekt
+      console.log('File-Objekt:', file);
+
+      // Debug: Log FormData Inhalt
+      const formData = new FormData();
+      formData.append('file', file);
+      if (currentQuote && currentQuote.quote && currentQuote.quote.id) {
+        formData.append('quote_id', currentQuote.quote.id);
+      }
+
+      // Debug: Alle FormData-Einträge loggen
+      for (let pair of formData.entries()) {
+        console.log('FormData:', pair[0], pair[1]);
+      }
+
+      // Debug: Zeige Typ und Größe der Datei
+      console.log('Dateityp:', file.type, 'Dateigröße:', file.size);
+
+      // Upload file
+      const response = await apiClient.uploadDocument(formData);
+
+      // Dokument und Analyse im State speichern
+      setUploadedDocuments(prev => [...prev, response]);
+
+      // Add AI response to chat (mit Analyse-Feedback)
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: response.analysis_result && response.analysis_result.extracted_text
+          ? `Dokument analysiert: ${response.analysis_result.extracted_text}`
+          : 'Dokument wurde analysiert. Ich werde die Informationen in die Angebotserstellung einbeziehen.',
+        type: 'text',
+        analysis: response.analysis_result
+      }]);
+
+      // Update conversation history
+      setConversationHistory(prev => [...prev, {
+        role: 'user',
+        content: `Datei hochgeladen: ${file.name}`,
+        timestamp: new Date().toISOString()
+      }, {
+        role: 'assistant',
+        content: response.analysis_result && response.analysis_result.extracted_text
+          ? `Dokument analysiert: ${response.analysis_result.extracted_text}`
+          : 'Dokument wurde analysiert. Ich werde die Informationen in die Angebotserstellung einbeziehen.',
+        timestamp: new Date().toISOString()
+      }]);
+
+    } catch (err) {
+      console.error('Failed to upload file:', err);
+      setError('Fehler beim Hochladen der Datei: ' + (err.message || 'Unbekannter Fehler'));
+      // Add error message to chat
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Entschuldigung, beim Hochladen der Datei ist ein Fehler aufgetreten.',
+        type: 'error'
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!inputValue.trim() || loading) return;
+
+    const userMessage = inputValue.trim();
+    setInputValue('');
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Add user message to chat
+      setMessages(prev => [...prev, {
+        role: 'user',
+        content: userMessage,
+        type: 'text'
+      }]);
+
+      // Update conversation history
+      const updatedHistory = [...conversationHistory, {
+        role: 'user',
+        content: userMessage,
+        timestamp: new Date().toISOString()
+      }];
+      setConversationHistory(updatedHistory);
+
+      // If this is the first message, analyze input
+      if (messages.length === 0) {
+        const analysis = await apiClient.analyzeInput(userMessage);
+        console.log('AI analysis response:', analysis);
+        // Sicherstellen, dass questions existiert und mindestens ein Element hat
+        const firstQuestion = analysis?.questions?.[0]?.question || 'Keine Frage generiert.';
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: firstQuestion,
+          type: 'text'
+        }]);
+
+        // Update conversation history
+        setConversationHistory(prev => [...prev, {
+          role: 'assistant',
+          content: firstQuestion,
+          timestamp: new Date().toISOString()
+        }]);
+
+      } else {
+        // Process follow-up question
+        const response = await apiClient.askQuestion(userMessage, updatedHistory);
+        
+        // Add AI response to chat
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: response.response,
+          type: 'text'
+        }]);
+
+        // Update conversation history
+        setConversationHistory(prev => [...prev, {
+          role: 'assistant',
+          content: response.response,
+          timestamp: new Date().toISOString()
+        }]);
+
+        // If we have enough information, show quote button
+        if (!response.needs_more_info) {
+          setShowQuoteButton(true);
+        }
+      }
+
+    } catch (err) {
+      console.error('Failed to process message:', err);
+      setError('Fehler bei der Verarbeitung: ' + (err.message || 'Unbekannter Fehler'));
+      
+      // Add error message to chat
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Entschuldigung, bei der Verarbeitung ist ein Fehler aufgetreten.',
+        type: 'error'
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleShowCustomerForm = () => {
+    setShowCustomerForm(true);
+  };
+
+  const handleCustomerInputChange = (e) => {
+    const { name, value } = e.target;
+    setCustomerData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCustomerFormSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      // Sammle alle Analyse-Resultate der hochgeladenen Dokumente
+      const documentAnalyses = uploadedDocuments
+        .map(doc => doc.analysis_result)
+        .filter(Boolean);
+      // Generate quote with customer data and document analyses
+      const quoteData = await apiClient.generateQuoteWithAI({
+        project_data: {
+          description: messages.find(m => m.role === 'user')?.content || '',
+          document_analyses: documentAnalyses
+        },
+        answers: conversationHistory.filter(m => m.role === 'user').map(m => ({
+          question: m.content,
+          answer: m.content
+        })),
+        conversation_history: conversationHistory,
+        ...customerData
+      });
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Kostenvoranschlag wurde erstellt! Sie können ihn jetzt speichern und als PDF herunterladen.',
+        type: 'text'
+      }]);
+      setConversationHistory(prev => [...prev, {
+        role: 'assistant',
+        content: 'Kostenvoranschlag wurde erstellt! Sie können ihn jetzt speichern und als PDF herunterladen.',
+        timestamp: new Date().toISOString()
+      }]);
+      setCurrentQuote(quoteData);
+      setShowCustomerForm(false);
+    } catch (err) {
+      console.error('Failed to generate quote:', err);
+      setError('Fehler beim Erstellen des Kostenvoranschlags: ' + (err.message || 'Unbekannter Fehler'));
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Entschuldigung, beim Erstellen des Kostenvoranschlags ist ein Fehler aufgetreten.',
+        type: 'error'
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Authentifizierungsprüfung
+  if (authLoading) {
+    return <div>Lade Authentifizierung...</div>;
+  }
+  if (!isAuthenticated) {
+    return <div>Bitte zuerst einloggen.</div>;
+  }
+
+  return (
+    <div className="flex flex-col h-full max-w-4xl mx-auto p-4">
+      <div className="flex-1 flex flex-col">
+        {/* Chat messages */}
+        <ScrollArea ref={scrollRef} className="flex-1 p-4">
+          <div className="space-y-4">
+            {messages.map((message, index) => (
+              <Card
+                key={index}
+                className={`p-4 ${
+                  message.role === 'user' 
+                    ? 'bg-blue-50 ml-auto' 
+                    : 'bg-white'
+                } max-w-[80%]`}
+              >
+                {message.type === 'file' ? (
+                  <div className="flex items-center space-x-2">
+                    <FileText className="h-4 w-4" />
+                    <span>{message.content}</span>
+                  </div>
+                ) : (
+                  <p className={message.type === 'error' ? 'text-red-500' : ''}>
+                    {message.content}
+                  </p>
+                )}
+              </Card>
+            ))}
+          </div>
+        </ScrollArea>
+
+        {/* Input area */}
+        <div className="border-t p-4">
+          <form onSubmit={handleSubmit} className="flex space-x-2">
+            <Input
+              value={inputValue}
+              onChange={handleInputChange}
+              placeholder="Beschreiben Sie Ihr Projekt..."
+              disabled={loading}
+              className="flex-1"
+            />
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              className="hidden"
+              accept="image/*, application/pdf"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+            >
+              <Upload className="h-4 w-4" />
+            </Button>
+            <Button type="submit" disabled={loading || !inputValue.trim()}>
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+            </Button>
+          </form>
+        </div>
+
+        {/* Quote generation button */}
+        {showQuoteButton && !currentQuote && !showCustomerForm && (
+          <div className="p-4 border-t">
+            <Button
+              onClick={handleShowCustomerForm}
+              disabled={loading}
+              className="w-full"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              Kostenvoranschlag erstellen
+            </Button>
+          </div>
+        )}
+
+        {/* Kundenformular */}
+        {showCustomerForm && !currentQuote && (
+          <div className="p-4 border-t bg-gray-50 rounded shadow mt-4">
+            <form onSubmit={handleCustomerFormSubmit} className="space-y-4 max-w-lg mx-auto">
+              <h2 className="text-lg font-semibold mb-2">Ihre Kontaktdaten für das Angebot</h2>
+              <div>
+                <label className="block text-sm font-medium mb-1">Name *</label>
+                <Input
+                  name="customer_name"
+                  value={customerData.customer_name}
+                  onChange={handleCustomerInputChange}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Adresse *</label>
+                <Input
+                  name="customer_address"
+                  value={customerData.customer_address}
+                  onChange={handleCustomerInputChange}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">E-Mail *</label>
+                <Input
+                  name="customer_email"
+                  type="email"
+                  value={customerData.customer_email}
+                  onChange={handleCustomerInputChange}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Telefon *</label>
+                <Input
+                  name="customer_phone"
+                  type="tel"
+                  value={customerData.customer_phone}
+                  onChange={handleCustomerInputChange}
+                  required
+                />
+              </div>
+              <div className="flex space-x-2 mt-4">
+                <Button type="submit" disabled={loading} className="w-full">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Angebot anfordern
+                </Button>
+                <Button type="button" variant="outline" onClick={() => setShowCustomerForm(false)} disabled={loading}>
+                  Abbrechen
+                </Button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Error message */}
+        {error && (
+          <div className="p-4 text-red-500 text-sm">
+            {error}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ChatQuoteWizard; 
+
+
+
 // Relative Path: src\components\Dashboard.jsx
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import apiClient from '../services/apiClient';
+import { Card } from './ui/card';
+import { Button } from './ui/button';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = ({ onNavigate }) => {
   const { user, demoMode } = useAuth();
@@ -4903,6 +5315,7 @@ const Dashboard = ({ onNavigate }) => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -5124,7 +5537,11 @@ const Dashboard = ({ onNavigate }) => {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {quotes.map((quote) => (
-                <tr key={quote.id} className="hover:bg-gray-50">
+                <tr 
+                  key={quote.id} 
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => navigate(`/quotes/${quote.id}`)}
+                >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {quote.quote_number}
                   </td>
@@ -5163,6 +5580,27 @@ const Dashboard = ({ onNavigate }) => {
           </div>
         )}
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-4">Neuen Kostenvoranschlag erstellen</h3>
+          <div className="space-y-4">
+            <Button
+              onClick={() => navigate('/create-quote')}
+              className="w-full"
+            >
+              Klassischer Editor
+            </Button>
+            <Button
+              onClick={() => navigate('/chat-quote')}
+              className="w-full"
+              variant="outline"
+            >
+              KI-Assistent
+            </Button>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };
@@ -5170,6 +5608,124 @@ const Dashboard = ({ onNavigate }) => {
 export default Dashboard;
 
 
+
+
+
+// Relative Path: src\components\Login.jsx
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Card } from './ui/card';
+import { useNavigate } from 'react-router-dom';
+
+const Login = () => {
+  const { login, demoLogin, error, isAuthenticated } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await login(email, password);
+    } catch (error) {
+      // Error is already handled by useAuth
+    }
+  };
+
+  const handleDemoLogin = () => {
+    demoLogin();
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <Card className="max-w-md w-full space-y-8 p-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Anmelden
+          </h2>
+        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="rounded-md shadow-sm -space-y-px">
+            <div>
+              <Input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="E-Mail-Adresse"
+                className="mb-4"
+              />
+            </div>
+            <div>
+              <Input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Passwort"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="text-red-500 text-sm text-center">{error}</div>
+          )}
+
+          <div className="space-y-4">
+            <Button type="submit" className="w-full">
+              Anmelden
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDemoLogin}
+              className="w-full"
+            >
+              Demo-Modus
+            </Button>
+            <Button
+              type="button"
+              variant="link"
+              onClick={() => navigate('/register')}
+              className="w-full"
+            >
+              Noch kein Konto? Registrieren
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
+};
+
+export default Login; 
+
+
+
+// Relative Path: src\components\PrivateRoute.jsx
+import React from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+
+const PrivateRoute = ({ children }) => {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
+
+  return children;
+};
+
+export default PrivateRoute; 
 
 
 
@@ -5623,6 +6179,310 @@ export default QuoteCreator;
 
 
 
+// Relative Path: src\components\QuoteDetail.jsx
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import apiClient from '../services/apiClient';
+import { Button } from './ui/button';
+import { Card } from './ui/card';
+
+const QuoteDetail = () => {
+  const { quoteId } = useParams();
+  const navigate = useNavigate();
+  const [quote, setQuote] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const loadQuote = async () => {
+      try {
+        const data = await apiClient.getQuote(quoteId);
+        setQuote(data);
+      } catch (err) {
+        console.error('Failed to load quote:', err);
+        setError('Fehler beim Laden des Angebots');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadQuote();
+  }, [quoteId]);
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('de-DE', {
+      style: 'currency',
+      currency: 'EUR'
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('de-DE', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'accepted':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'rejected':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'accepted':
+        return 'Angenommen';
+      case 'pending':
+        return 'Ausstehend';
+      case 'rejected':
+        return 'Abgelehnt';
+      case 'draft':
+        return 'Entwurf';
+      default:
+        return status;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <p className="text-red-600 mb-4">{error}</p>
+        <Button onClick={() => navigate('/dashboard')}>Zurück zum Dashboard</Button>
+      </div>
+    );
+  }
+
+  if (!quote) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <p className="text-gray-600 mb-4">Angebot nicht gefunden</p>
+        <Button onClick={() => navigate('/dashboard')}>Zurück zum Dashboard</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-6 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-900">Angebot {quote.quote_number}</h1>
+        <Button onClick={() => navigate('/dashboard')}>Zurück zum Dashboard</Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold mb-4">Kundeninformationen</h2>
+          <div className="space-y-2">
+            <p><span className="font-medium">Name:</span> {quote.customer_name}</p>
+            <p><span className="font-medium">E-Mail:</span> {quote.customer_email}</p>
+            <p><span className="font-medium">Telefon:</span> {quote.customer_phone}</p>
+            <p><span className="font-medium">Adresse:</span> {quote.customer_address}</p>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold mb-4">Projektinformationen</h2>
+          <div className="space-y-2">
+            <p><span className="font-medium">Titel:</span> {quote.project_title}</p>
+            <p><span className="font-medium">Beschreibung:</span> {quote.project_description}</p>
+            <p><span className="font-medium">Status:</span> 
+              <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(quote.status)}`}>
+                {getStatusText(quote.status)}
+              </span>
+            </p>
+            <p><span className="font-medium">Erstellt am:</span> {formatDate(quote.created_at)}</p>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-6 mb-8">
+        <h2 className="text-lg font-semibold mb-4">Angebotspositionen</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Position</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Beschreibung</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Menge</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Einheit</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Einzelpreis</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gesamtpreis</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {quote.items.map((item) => (
+                <tr key={item.id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.position}</td>
+                  <td className="px-6 py-4 text-sm text-gray-900">{item.description}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.quantity}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.unit}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(item.unit_price)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatCurrency(item.total_price)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-gray-50">
+                <td colSpan="5" className="px-6 py-4 text-right text-sm font-medium text-gray-900">Gesamtbetrag:</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{formatCurrency(quote.total_amount)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </Card>
+
+      {quote.conversation_history && quote.conversation_history.length > 0 && (
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold mb-4">KI-Konversationsverlauf</h2>
+          <div className="space-y-4">
+            {quote.conversation_history.map((msg, index) => (
+              <div key={index} className={`p-4 rounded-lg ${msg.role === 'assistant' ? 'bg-purple-50' : 'bg-gray-50'}`}>
+                <p className="font-medium mb-2">{msg.role === 'assistant' ? 'KI-Assistent' : 'Nutzer'}</p>
+                <p className="text-gray-700">{msg.content}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+};
+
+export default QuoteDetail; 
+
+
+
+// Relative Path: src\components\Register.jsx
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Card } from './ui/card';
+import { useNavigate } from 'react-router-dom';
+
+const Register = () => {
+  const { register, error, isAuthenticated } = useAuth();
+  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    console.log("Register submit clicked", { email, username, password });
+    if (password !== confirmPassword) {
+      alert('Passwörter stimmen nicht überein');
+      return;
+    }
+    console.log("Register submit clicked 2", { email, username, password });
+    try {
+      await register({ email, username, password });
+    } catch (error) {
+      // Error is already handled by useAuth
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <Card className="max-w-md w-full space-y-8 p-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Registrieren
+          </h2>
+        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="rounded-md shadow-sm -space-y-px">
+            <div>
+              <Input
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Benutzername"
+                className="mb-4"
+              />
+            </div>
+            <div>
+              <Input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="E-Mail-Adresse"
+                className="mb-4"
+              />
+            </div>
+            <div>
+              <Input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Passwort"
+                className="mb-4"
+              />
+            </div>
+            <div>
+              <Input
+                type="password"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Passwort bestätigen"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="text-red-500 text-sm text-center">{error}</div>
+          )}
+
+          <div className="space-y-4">
+            <Button type="submit" className="w-full">
+              Registrieren
+            </Button>
+            <Button
+              type="button"
+              variant="link"
+              onClick={() => navigate('/login')}
+              className="w-full"
+            >
+              Bereits ein Konto? Anmelden
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  );
+};
+
+export default Register; 
+
+
+
 // Relative Path: src\hooks\useAuth.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import apiClient from '../services/apiClient';
@@ -5680,6 +6540,7 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const response = await apiClient.login(email, password);
+      localStorage.setItem('access_token', response.access_token);
       setIsAuthenticated(true);
       
       // Fetch user data
@@ -5723,9 +6584,24 @@ export function AuthProvider({ children }) {
 
   // Register function
   const register = async (userData) => {
-    setError(null);
+    console.log("register 2", { userData });
     try {
+      try {
+        console.log("register", { userData });
+      } catch (e) {
+        console.log("console.log failed!", e);
+      }
       const response = await apiClient.register(userData);
+      // After successful registration, log the user in
+      console.log("BEFORE LOGIN", userData);
+      const loginResponse = await apiClient.login(userData.email, userData.password);
+      console.log("AFTER LOGIN", loginResponse);
+      localStorage.setItem('access_token', loginResponse.access_token);
+      setIsAuthenticated(true);
+      // Fetch user data
+      const userDataFromApi = await apiClient.getCurrentUser();
+      console.log("USER DATA FROM API", userDataFromApi);
+      setUser(userDataFromApi);
       return response;
     } catch (err) {
       setError(err.message || 'Registration failed');
@@ -5765,15 +6641,20 @@ export default useAuth;
 
 
 // Relative Path: src\App.jsx
-import React, { useState } from 'react';
+import React from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import Dashboard from './components/Dashboard';
 import QuoteCreator from './components/QuoteCreator';
 import apiClient from './services/apiClient';
 import './App.css';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Login from './components/Login';
+import Register from './components/Register';
+import ChatQuoteWizard from './components/ChatQuoteWizard';
+import QuoteDetail from './components/QuoteDetail';
 
 // Header Component
-const Header = ({ onNavigate }) => {
+const Header = () => {
   const { isAuthenticated, logout, user } = useAuth();
 
   return (
@@ -5789,31 +6670,13 @@ const Header = ({ onNavigate }) => {
             {!isAuthenticated ? (
               <>
                 <button 
-                  onClick={() => onNavigate('landing')}
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Features
-                </button>
-                <button 
-                  onClick={() => onNavigate('landing')}
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Preise
-                </button>
-                <button 
-                  onClick={() => onNavigate('landing')}
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Kontakt
-                </button>
-                <button 
-                  onClick={() => onNavigate('login')}
+                  onClick={() => window.location.href = '/login'}
                   className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
                 >
                   Anmelden
                 </button>
                 <button 
-                  onClick={() => onNavigate('login')}
+                  onClick={() => window.location.href = '/register'}
                   className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
                 >
                   Registrieren
@@ -5822,13 +6685,13 @@ const Header = ({ onNavigate }) => {
             ) : (
               <>
                 <button 
-                  onClick={() => onNavigate('dashboard')}
+                  onClick={() => window.location.href = '/dashboard'}
                   className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Dashboard
                 </button>
                 <button 
-                  onClick={() => onNavigate('new-quote')}
+                  onClick={() => window.location.href = '/new-quote'}
                   className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                 >
                   Neues Angebot
@@ -5851,227 +6714,24 @@ const Header = ({ onNavigate }) => {
   );
 };
 
-// Landing Page Component
-const LandingPage = ({ onNavigate }) => (
-  <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-    <Header onNavigate={onNavigate} />
-    
-    <main className="container mx-auto px-4 py-16">
-      <div className="text-center mb-16">
-        <h1 className="text-5xl font-bold text-gray-900 mb-6">
-          KI-gestützter Kostenvoranschlag für Malerbetriebe
-        </h1>
-        <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-          Erstellen Sie professionelle Kostenvoranschläge in wenigen Minuten. Unsere KI analysiert Ihre Eingaben und Pläne automatisch und erstellt detaillierte Angebote.
-        </p>
-        
-        <div className="flex justify-center space-x-4">
-          <button
-            onClick={() => onNavigate('login')}
-            className="bg-purple-600 text-white px-8 py-3 rounded-lg text-lg font-medium hover:bg-purple-700 transition-colors"
-          >
-            Kostenlos testen
-          </button>
-          <button
-            onClick={() => onNavigate('login')}
-            className="bg-white text-purple-600 border-2 border-purple-600 px-8 py-3 rounded-lg text-lg font-medium hover:bg-purple-50 transition-colors"
-          >
-            Demo ansehen
-          </button>
-        </div>
-      </div>
-
-      <div className="grid md:grid-cols-3 gap-8 mb-16">
-        <div className="bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-          <div className="text-4xl mb-4">🤖</div>
-          <h3 className="text-xl font-semibold mb-4">KI-gestützt</h3>
-          <p className="text-gray-600">
-            Intelligente Analyse Ihrer Eingaben und automatische Generierung von Angebotsposition
-          </p>
-        </div>
-
-        <div className="bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-          <div className="text-4xl mb-4">📋</div>
-          <h3 className="text-xl font-semibold mb-4">Planauswertung</h3>
-          <p className="text-gray-600">
-            Automatische Erkennung von Räumen, Flächen und Materialien aus hochgeladenen Bauplänen
-          </p>
-        </div>
-
-        <div className="bg-white p-8 rounded-lg shadow-lg hover:shadow-xl transition-shadow">
-          <div className="text-4xl mb-4">⚡</div>
-          <h3 className="text-xl font-semibold mb-4">Schnell & Einfach</h3>
-          <p className="text-gray-600">
-            Von der Eingabe zum fertigen PDF-Angebot in unter 5 Minuten - keine komplizierte Software nötig
-          </p>
-        </div>
-      </div>
-    </main>
-  </div>
-);
-
-// Login Component
-const Login = ({ onNavigate }) => {
-  const { login, demoLogin, error } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await login(email, password);
-      onNavigate('dashboard');
-    } catch (err) {
-      console.error('Login failed:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoLogin = () => {
-    demoLogin();
-    onNavigate('dashboard');
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Maler Kostenvoranschlag</h1>
-          <p className="text-gray-600">KI-gestützter Kostenvoranschlags-Generator</p>
-        </div>
-
-        <h2 className="text-xl font-semibold mb-6">Willkommen</h2>
-        <p className="text-gray-600 mb-6">Melden Sie sich an oder erstellen Sie ein neues Konto</p>
-
-        <div className="flex space-x-2 mb-6">
-          <button className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-green-700 transition-colors">
-            Anmelden
-          </button>
-          <button className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-            Registrieren
-          </button>
-        </div>
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">E-Mail *</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="ihre@email.de"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Passwort *</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Anmelden...' : 'Anmelden'}
-          </button>
-        </form>
-
-        {error && (
-          <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-            {error}
-          </div>
-        )}
-
-        <div className="mt-6 text-center">
-          <p className="text-gray-600 mb-4">ODER</p>
-          <button
-            onClick={handleDemoLogin}
-            className="w-full bg-green-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-green-700 transition-colors"
-          >
-            Demo-Modus testen
-          </button>
-        </div>
-
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
-            Mit der Nutzung stimmen Sie unseren{' '}
-            <button className="text-blue-600 hover:underline">Nutzungsbedingungen</button> zu.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // Main App Component
 function App() {
-  const [currentView, setCurrentView] = useState('landing');
-
-  // Landing Page Component
-  const LandingPageWrapper = () => (
-    <LandingPage onNavigate={setCurrentView} />
-  );
-
-  // Protected Route Component
-  const ProtectedRoute = ({ children }) => {
-    const { isAuthenticated } = useAuth();
-    
-    if (!isAuthenticated) {
-      return <Login onNavigate={setCurrentView} />;
-    }
-    
-    return children;
-  };
-
-  // Main App Router
-  const renderCurrentView = () => {
-    switch (currentView) {
-      case 'landing':
-        return <LandingPageWrapper />;
-      case 'login':
-        return <Login onNavigate={setCurrentView} />;
-      case 'dashboard':
-        return (
-          <ProtectedRoute>
-            <div className="min-h-screen bg-gray-50">
-              <Header onNavigate={setCurrentView} />
-              <Dashboard onNavigate={setCurrentView} />
-            </div>
-          </ProtectedRoute>
-        );
-      case 'new-quote':
-        return (
-          <ProtectedRoute>
-            <div className="min-h-screen bg-gray-50">
-              <Header onNavigate={setCurrentView} />
-              <QuoteCreator onNavigate={setCurrentView} />
-            </div>
-          </ProtectedRoute>
-        );
-      default:
-        return <LandingPageWrapper />;
-    }
-  };
-
   return (
-    <AuthProvider>
-      <div className="App">
-        {renderCurrentView()}
-      </div>
-    </AuthProvider>
+    <Router>
+      <AuthProvider>
+        <div className="min-h-screen bg-gray-50">
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/new-quote" element={<QuoteCreator />} />
+            <Route path="/chat-quote" element={<ChatQuoteWizard />} />
+            <Route path="/quotes/:quoteId" element={<QuoteDetail />} />
+            <Route path="/" element={<Navigate to="/login" />} />
+          </Routes>
+        </div>
+      </AuthProvider>
+    </Router>
   );
 }
 
