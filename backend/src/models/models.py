@@ -24,6 +24,14 @@ class User(Base):
     quotes_this_month = Column(Integer, default=0)
     additional_quotes = Column(Integer, default=0)
     
+    # Enhanced quota tracking
+    documents_this_month = Column(Integer, default=0)
+    api_requests_today = Column(Integer, default=0)
+    storage_used_mb = Column(Float, default=0.0)
+    last_quota_reset = Column(DateTime)
+    quota_warnings_enabled = Column(Boolean, default=True)
+    quota_notification_threshold = Column(Integer, default=80)
+    
     # Stripe integration
     stripe_customer_id = Column(String(255))
     stripe_subscription_id = Column(String(255))
@@ -39,6 +47,8 @@ class User(Base):
     quotes = relationship("Quote", back_populates="user", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    usage_tracking = relationship("UsageTracking", back_populates="user", cascade="all, delete-orphan")
+    quota_notifications = relationship("QuotaNotification", back_populates="user", cascade="all, delete-orphan")
 
 class Quote(Base):
     __tablename__ = "quotes"
@@ -73,6 +83,10 @@ class Quote(Base):
     # AI and conversation
     created_by_ai = Column(Boolean, default=False)  # Whether this quote was created via AI chat
     conversation_history = Column(Text, nullable=True)  # JSON string of conversation history
+    
+    # Quota tracking
+    quota_consumed = Column(Boolean, default=True)
+    generation_method = Column(String(50), default='manual')  # manual, ai, api
     
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
@@ -148,6 +162,9 @@ class Document(Base):
     image_quality_score = Column(Float, default=0.0)  # Image quality assessment
     text_density = Column(Float, default=0.0)  # Text density in document
     
+    # Quota tracking
+    quota_consumed = Column(Boolean, default=True)
+    
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -181,4 +198,48 @@ class Payment(Base):
     # Relationships
     user = relationship("User", back_populates="payments")
     quote = relationship("Quote", back_populates="payments")
+
+class UsageTracking(Base):
+    __tablename__ = "usage_tracking"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Usage details
+    resource_type = Column(String(50), nullable=False)  # quotes, documents, api_requests, storage
+    action = Column(String(100), nullable=False)  # create_quote, upload_document, api_call, etc.
+    amount = Column(Integer, default=1)
+    
+    # Metadata
+    metadata = Column(Text)  # JSON metadata about the action
+    ip_address = Column(String(45))
+    user_agent = Column(String(500))
+    
+    # Timestamps
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="usage_tracking")
+
+class QuotaNotification(Base):
+    __tablename__ = "quota_notifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # Notification details
+    notification_type = Column(String(50), nullable=False)  # warning, limit_reached, reset
+    resource_type = Column(String(50), nullable=False)  # quotes, documents, api_requests, storage
+    threshold_percentage = Column(Float, nullable=False)
+    message = Column(Text, nullable=False)
+    
+    # Status
+    is_read = Column(Boolean, default=False)
+    sent_at = Column(DateTime)
+    
+    # Timestamps
+    created_at = Column(DateTime, server_default=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="quota_notifications")
 

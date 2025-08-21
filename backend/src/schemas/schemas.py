@@ -105,6 +105,69 @@ class ExportResponse(BaseModel):
     message: str
     export_info: Optional[Dict[str, Any]] = None
 
+# Quota Management Models
+class QuotaUsage(BaseModel):
+    used: int
+    limit: int
+    remaining: int
+    percentage: float
+    additional_available: Optional[int] = 0
+
+class QuotaLimits(BaseModel):
+    quotes_per_month: int
+    documents_per_month: int
+    api_requests_per_day: int
+    storage_mb: int
+
+class QuotaWarning(BaseModel):
+    type: str
+    resource: str
+    percentage: float
+    message: str
+    action: str
+
+class QuotaStatus(BaseModel):
+    user_id: int
+    is_premium: bool
+    premium_until: Optional[str] = None
+    limits: QuotaLimits
+    usage: Dict[str, QuotaUsage]
+    warnings: List[QuotaWarning]
+    period: Dict[str, str]
+    last_updated: str
+
+class QuotaCheckRequest(BaseModel):
+    resource_type: str = Field(description="Resource type: quotes, documents, api_requests, storage")
+    amount: int = Field(default=1, ge=1, description="Amount to check")
+
+class QuotaConsumeRequest(BaseModel):
+    resource_type: str = Field(description="Resource type: quotes, documents, api_requests, storage")
+    amount: int = Field(default=1, ge=1, description="Amount to consume")
+    metadata: Optional[Dict[str, Any]] = None
+
+class UsageHistoryResponse(BaseModel):
+    id: int
+    resource_type: str
+    action: str
+    amount: int
+    metadata: Optional[str] = None
+    created_at: str
+    ip_address: Optional[str] = None
+
+class QuotaNotificationResponse(BaseModel):
+    id: int
+    notification_type: str
+    resource_type: str
+    threshold_percentage: float
+    message: str
+    is_read: bool
+    sent_at: Optional[str] = None
+    created_at: str
+
+class QuotaSettingsUpdate(BaseModel):
+    quota_warnings_enabled: Optional[bool] = None
+    quota_notification_threshold: Optional[int] = Field(None, ge=50, le=100)
+
 class AIAnalysisRequest(BaseModel):
     input: str
     conversation_history: Optional[List[AIConversationMessage]] = None

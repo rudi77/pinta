@@ -10,7 +10,7 @@ from core.cache import cache_service
 from core.websocket_manager import keep_connections_alive
 from core.security_tasks import start_security_tasks, stop_security_tasks, get_security_status
 from core.settings import settings
-from routes import auth, users, quotes, ai, payments, chat, documents
+from routes import auth, users, quotes, ai, payments, chat, documents, quota
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -67,6 +67,7 @@ app.include_router(ai.router, tags=["ai"])
 app.include_router(payments.router, tags=["payments"])
 app.include_router(chat.router, tags=["chat"])
 app.include_router(documents.router, tags=["documents"])
+app.include_router(quota.router, tags=["quota"])
 
 # Health check
 @app.get("/health")
