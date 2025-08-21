@@ -197,6 +197,56 @@ class AIService:
             logger.error(f"OpenAI API error in quote generation: {str(e)}")
             return self._get_mock_quote_response(project_data, answers)
 
+    async def ask_follow_up_question_stream(self, conversation_history: List[Dict], 
+                                          user_message: str):
+        """Handle follow-up questions with streaming response"""
+        
+        if not self.enabled:
+            yield self._get_mock_followup_response(user_message)
+            return
+        
+        try:
+            system_prompt = """Du bist ein hilfsreicher KI-Assistent für Maler-Kostenvoranschläge.
+            Beantworte Fragen des Kunden höflich und kompetent. Wenn zusätzliche Informationen 
+            benötigt werden, stelle gezielte Nachfragen.
+            
+            Antworte direkt und natürlich, ohne JSON-Formatierung."""
+
+            # Build conversation context
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            for msg in conversation_history[-5:]:  # Last 5 messages for context
+                messages.append({
+                    "role": msg.get("role", "user"),
+                    "content": msg.get("content", "")
+                })
+            
+            messages.append({"role": "user", "content": user_message})
+
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=800,
+                stream=True
+            )
+
+            async for chunk in response:
+                if chunk.choices[0].delta.content is not None:
+                    yield {
+                        "type": "content",
+                        "content": chunk.choices[0].delta.content
+                    }
+            
+            yield {"type": "done"}
+
+        except Exception as e:
+            logger.error(f"OpenAI streaming error in follow-up: {str(e)}")
+            yield {
+                "type": "error",
+                "error": str(e)
+            }
+    
     async def ask_follow_up_question(self, conversation_history: List[Dict], 
                                    user_message: str) -> Dict:
         """Handle follow-up questions in the conversation"""
