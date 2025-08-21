@@ -8,6 +8,7 @@ import logging
 from core.database import init_db
 from core.cache import cache_service
 from core.websocket_manager import keep_connections_alive
+from core.security_tasks import start_security_tasks, stop_security_tasks, get_security_status
 from core.settings import settings
 from routes import auth, users, quotes, ai, payments, chat, documents
 
@@ -30,14 +31,16 @@ async def lifespan(app: FastAPI):
     
     # Start background tasks
     asyncio.create_task(keep_connections_alive())
+    await start_security_tasks()
     logger.info("Background tasks started")
     
     yield
     
     # Shutdown
     logger.info("Shutting down...")
+    await stop_security_tasks()
     await cache_service.disconnect()
-    logger.info("Cache service disconnected")
+    logger.info("Services disconnected")
 
 # Create FastAPI app
 app = FastAPI(
@@ -87,6 +90,15 @@ async def tasks_health():
     return {
         "status": "healthy",
         "running_tasks": await background_task_manager.get_running_tasks_count()
+    }
+
+# Security status
+@app.get("/security-health")
+async def security_health():
+    security_status = await get_security_status()
+    return {
+        "status": "healthy" if security_status.get("running") else "stopped",
+        "details": security_status
     }
 
 # Serve static files (for production)
