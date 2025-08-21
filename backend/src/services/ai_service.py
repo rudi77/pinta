@@ -1,4 +1,3 @@
-import os
 import openai
 import json
 import asyncio
@@ -6,12 +5,13 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import logging
 import base64
+from core.settings import settings
 
 logger = logging.getLogger(__name__)
 
 class AIService:
     def __init__(self):
-        api_key = os.getenv('OPENAI_API_KEY')
+        api_key = settings.openai_api_key
         if api_key and api_key != 'test_key_placeholder' and api_key.startswith('sk-'):
             self.client = openai.AsyncOpenAI(api_key=api_key)
             self.model = "gpt-4.1-mini"

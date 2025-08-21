@@ -1,16 +1,22 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
-import os
+from sqlalchemy.pool import QueuePool
 from typing import AsyncGenerator
+from core.settings import settings
+import logging
 
-# Database URL
-DATABASE_URL = "sqlite+aiosqlite:///./test_maler_kostenvoranschlag.db"
+logger = logging.getLogger(__name__)
 
-# Create async engine
+# Create async engine with connection pooling
 engine = create_async_engine(
-    DATABASE_URL,
-    echo=True,  # Set to False in production
-    future=True
+    settings.database_url,
+    echo=settings.debug,
+    future=True,
+    poolclass=QueuePool,
+    pool_size=settings.database_pool_max_size,
+    max_overflow=settings.database_pool_overflow,
+    pool_pre_ping=True,
+    pool_recycle=3600,  # Recycle connections every hour
 )
 
 # Create async session factory

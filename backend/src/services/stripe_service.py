@@ -1,14 +1,14 @@
-import os
 import stripe
 from flask import current_app
 from datetime import datetime, timedelta
 from src.models.models import db, User, Payment
+from core.settings import settings
 
 class StripeService:
     def __init__(self):
-        stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
-        self.webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET')
-        self.price_id = os.getenv('STRIPE_PRICE_ID')  # Premium subscription price ID
+        stripe.api_key = settings.stripe_secret_key
+        self.webhook_secret = settings.stripe_webhook_secret
+        self.price_id = settings.stripe_price_id  # Premium subscription price ID
         
     def create_checkout_session(self, user_id, success_url, cancel_url):
         """

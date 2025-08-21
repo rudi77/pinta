@@ -1,7 +1,9 @@
 from sqlalchemy import Column, Integer, String, Float, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from src.core.database import Base
+from sqlalchemy.dialects.postgresql import UUID
+from core.database import Base
+import uuid
 
 class User(Base):
     __tablename__ = "users"
@@ -21,6 +23,13 @@ class User(Base):
     premium_until = Column(DateTime)
     quotes_this_month = Column(Integer, default=0)
     additional_quotes = Column(Integer, default=0)
+    
+    # Stripe integration
+    stripe_customer_id = Column(String(255))
+    stripe_subscription_id = Column(String(255))
+    
+    # Account status
+    is_active = Column(Boolean, default=True)
     
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
