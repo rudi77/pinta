@@ -83,6 +83,28 @@ class IntelligentFollowUpRequest(BaseModel):
     conversation_id: str = "default"
     context: Optional[Dict[str, Any]] = None
 
+# Professional PDF Generation Models
+class PDFGenerationOptions(BaseModel):
+    include_signature: bool = True
+    include_logo: bool = True
+    include_terms: bool = True
+    custom_footer: Optional[str] = None
+
+class PDFGenerationResponse(BaseModel):
+    success: bool
+    message: str
+    pdf_info: Optional[Dict[str, Any]] = None
+
+class ExportOptions(BaseModel):
+    format_type: str = Field(default="pdf", description="Export format: pdf, json, csv")
+    include_signature: bool = True
+    include_logo: bool = True
+
+class ExportResponse(BaseModel):
+    success: bool
+    message: str
+    export_info: Optional[Dict[str, Any]] = None
+
 class AIAnalysisRequest(BaseModel):
     input: str
     conversation_history: Optional[List[AIConversationMessage]] = None

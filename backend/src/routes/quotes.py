@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func
 from sqlalchemy.orm import selectinload
@@ -12,12 +13,16 @@ from src.routes.auth import get_current_user
 from src.models.models import User, Quote, QuoteItem
 from src.schemas.schemas import (
     QuoteCreate, QuoteUpdate, QuoteResponse, QuoteItemCreate, 
-    SuccessResponse, ErrorResponse, GenerateQuoteAIRequest
+    SuccessResponse, ErrorResponse, GenerateQuoteAIRequest,
+    PDFGenerationOptions, PDFGenerationResponse, ExportOptions, ExportResponse
 )
 from src.services.ai_service import AIService
+from src.services.professional_pdf_service import ProfessionalPDFService, QuoteExportService
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/quotes", tags=["quotes"])
 ai_service = AIService()
+pdf_service = ProfessionalPDFService()
+export_service = QuoteExportService()
 
 def generate_quote_number() -> str:
     """Generate unique quote number"""
@@ -470,4 +475,148 @@ async def duplicate_quote(
     new_quote.quote_items = items_result.scalars().all()
     
     return new_quote
+
+@router.post("/{quote_id}/pdf/generate", response_model=PDFGenerationResponse)
+async def generate_quote_pdf(
+    quote_id: int,
+    options: Optional[PDFGenerationOptions] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate professional PDF for quote"""
+    
+    # Get quote with items
+    result = await db.execute(
+        select(Quote)
+        .where(Quote.id == quote_id)
+        .where(Quote.user_id == current_user.id)
+        .options(selectinload(Quote.quote_items))
+    )
+    quote = result.scalar_one_or_none()
+
+    if not quote:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quote not found"
+        )
+
+    try:
+        # Convert quote to dict format expected by PDF service
+        quote_data = quote_to_response(quote)
+        
+        # Generate PDF
+        options_dict = options.model_dump() if options else {}
+        pdf_result = await pdf_service.generate_professional_quote_pdf(quote_data, options_dict)
+        
+        if pdf_result['success']:
+            return {
+                'success': True,
+                'message': 'PDF generated successfully',
+                'pdf_info': pdf_result
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=pdf_result['error']
+            )
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"PDF generation failed: {str(e)}"
+        )
+
+@router.get("/{quote_id}/pdf/download")
+async def download_quote_pdf(
+    quote_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Download generated PDF"""
+    
+    # Verify quote ownership
+    result = await db.execute(
+        select(Quote)
+        .where(Quote.id == quote_id)
+        .where(Quote.user_id == current_user.id)
+    )
+    quote = result.scalar_one_or_none()
+
+    if not quote:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quote not found"
+        )
+
+    # Look for existing PDF file
+    from pathlib import Path
+    pdf_dir = Path('uploads/pdfs')
+    
+    # Find the most recent PDF for this quote
+    pdf_files = list(pdf_dir.glob(f"{quote.quote_number}_*.pdf"))
+    
+    if not pdf_files:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF not found. Please generate PDF first."
+        )
+    
+    # Get the most recent PDF
+    latest_pdf = max(pdf_files, key=lambda p: p.stat().st_mtime)
+    
+    return FileResponse(
+        path=latest_pdf,
+        filename=f"{quote.quote_number}.pdf",
+        media_type='application/pdf'
+    )
+
+@router.post("/{quote_id}/export", response_model=ExportResponse)
+async def export_quote(
+    quote_id: int,
+    export_options: ExportOptions,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Export quote in various formats (PDF, JSON, CSV)"""
+    
+    # Get quote with items
+    result = await db.execute(
+        select(Quote)
+        .where(Quote.id == quote_id)
+        .where(Quote.user_id == current_user.id)
+        .options(selectinload(Quote.quote_items))
+    )
+    quote = result.scalar_one_or_none()
+
+    if not quote:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Quote not found"
+        )
+
+    try:
+        # Convert quote to dict format
+        quote_data = quote_to_response(quote)
+        
+        # Export in requested format
+        options_dict = export_options.model_dump(exclude={'format_type'})
+        export_result = await export_service.export_quote(quote_data, export_options.format_type, options_dict)
+        
+        if export_result['success']:
+            return {
+                'success': True,
+                'message': f'Quote exported as {export_options.format_type.upper()} successfully',
+                'export_info': export_result
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=export_result['error']
+            )
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Export failed: {str(e)}"
+        )
 
