@@ -22,3 +22,20 @@ jinja2==3.1.4
 stripe==12.2.0
 redis==5.2.0
 
+# Document processing and OCR
+opencv-python==4.10.0.84
+easyocr==1.7.2
+numpy==1.26.4
+pandas==2.2.3
+
+# PDF table extraction
+camelot-py[base]==0.11.0
+tabula-py==2.9.3
+
+# Additional image processing
+scikit-image==0.24.0
+opencv-contrib-python==4.10.0.84
+
+# For better file handling
+python-magic==0.4.27
+

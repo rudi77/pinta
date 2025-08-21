@@ -82,6 +82,7 @@ class Quote(Base):
     user = relationship("User", back_populates="quotes")
     quote_items = relationship("QuoteItem", back_populates="quote", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="quote")
+    documents = relationship("Document", back_populates="quote", cascade="all, delete-orphan")
 
 class QuoteItem(Base):
     __tablename__ = "quote_items"
@@ -114,17 +115,38 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     quote_id = Column(Integer, ForeignKey("quotes.id"))
+    batch_id = Column(String(100))  # For batch processing
     
     filename = Column(String(255), nullable=False)
     original_filename = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
     file_size = Column(Integer)
     mime_type = Column(String(100))
+    file_hash = Column(String(64))  # SHA-256 hash for deduplication
     
     # OCR and analysis results
     extracted_text = Column(Text)
-    analysis_result = Column(Text, nullable=True)  # JSON string
+    text_confidence = Column(Float, default=0.0)  # OCR confidence score
+    handwriting_detected = Column(Boolean, default=False)
+    
+    # Processing metadata
     processing_status = Column(String(20), default="pending")  # pending, processing, completed, failed
+    processing_method = Column(String(50))  # tesseract, easyocr, etc.
+    processing_time = Column(Float)  # Processing duration in seconds
+    analysis_result = Column(Text, nullable=True)  # Full JSON analysis result
+    
+    # Document type classification
+    document_type = Column(String(50))  # floor_plan, photo, blueprint, invoice, etc.
+    page_count = Column(Integer, default=1)
+    
+    # Extracted structured data
+    detected_rooms = Column(Text)  # JSON array of detected rooms
+    detected_measurements = Column(Text)  # JSON array of measurements found
+    detected_tables = Column(Text)  # JSON array of extracted tables
+    
+    # Quality metrics
+    image_quality_score = Column(Float, default=0.0)  # Image quality assessment
+    text_density = Column(Float, default=0.0)  # Text density in document
     
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
@@ -132,6 +154,7 @@ class Document(Base):
     
     # Relationships
     user = relationship("User", back_populates="documents")
+    quote = relationship("Quote", back_populates="documents")
 
 class Payment(Base):
     __tablename__ = "payments"

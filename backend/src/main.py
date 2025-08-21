@@ -9,7 +9,7 @@ from core.database import init_db
 from core.cache import cache_service
 from core.websocket_manager import keep_connections_alive
 from core.settings import settings
-from routes import auth, users, quotes, ai, payments, chat
+from routes import auth, users, quotes, ai, payments, chat, documents
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -63,6 +63,7 @@ app.include_router(quotes.router, tags=["quotes"])
 app.include_router(ai.router, tags=["ai"])
 app.include_router(payments.router, tags=["payments"])
 app.include_router(chat.router, tags=["chat"])
+app.include_router(documents.router, tags=["documents"])
 
 # Health check
 @app.get("/health")

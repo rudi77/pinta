@@ -3,14 +3,25 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies for OCR and document processing
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     libpq-dev \
     tesseract-ocr \
     tesseract-ocr-deu \
+    tesseract-ocr-eng \
     poppler-utils \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    libgthread-2.0-0 \
+    python3-opencv \
+    ghostscript \
+    libmagic1 \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
