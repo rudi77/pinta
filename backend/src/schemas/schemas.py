@@ -47,6 +47,42 @@ class AIConversationHistory(BaseModel):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+# Intelligent Follow-up Question Models
+class QuestionType(str, Enum):
+    multiple_choice = "multiple_choice"
+    text = "text"
+    number = "number"
+    yes_no = "yes_no"
+
+class QuestionImportance(str, Enum):
+    high = "high"
+    medium = "medium"
+    low = "low"
+
+class IntelligentQuestion(BaseModel):
+    id: str
+    question: str
+    type: QuestionType
+    importance: QuestionImportance
+    options: Optional[List[str]] = None
+
+class CompletionStatus(BaseModel):
+    estimated_completeness: int = Field(ge=0, le=100, description="Percentage of information completeness")
+    missing_critical_info: List[str] = Field(default_factory=list)
+    ready_for_quote: bool = False
+
+class IntelligentFollowUpResponse(BaseModel):
+    response: str
+    has_follow_up_questions: bool
+    questions: List[IntelligentQuestion] = Field(default_factory=list)
+    completion_status: CompletionStatus
+    suggestions: List[str] = Field(default_factory=list)
+
+class IntelligentFollowUpRequest(BaseModel):
+    message: str
+    conversation_id: str = "default"
+    context: Optional[Dict[str, Any]] = None
+
 class AIAnalysisRequest(BaseModel):
     input: str
     conversation_history: Optional[List[AIConversationMessage]] = None

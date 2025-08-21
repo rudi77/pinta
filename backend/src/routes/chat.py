@@ -5,6 +5,7 @@ from sqlalchemy import select
 import json
 import logging
 from typing import Dict, List, Optional
+from datetime import datetime
 
 from core.database import get_db
 from core.cache import cache_service
@@ -14,6 +15,7 @@ from core.security import get_current_user
 from services.ai_service import AIService
 from models.models import User
 from core.settings import settings
+from schemas.schemas import IntelligentFollowUpRequest, IntelligentFollowUpResponse
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -99,7 +101,7 @@ async def handle_chat_message(websocket: WebSocket, user_id: int, message_data: 
         # Initialize AI service
         ai_service = AIService()
         
-        # Start streaming response
+        # Start streaming response with intelligent follow-up
         await websocket_manager.send_streaming_response(
             user_id=user_id,
             stream_generator=ai_service.ask_follow_up_question_stream(
@@ -224,6 +226,85 @@ async def analyze_project_description(
         raise
     except Exception as e:
         logger.error(f"Error in project analysis: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/intelligent-followup", response_model=IntelligentFollowUpResponse)
+async def get_intelligent_followup(
+    request: IntelligentFollowUpRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Generate intelligent context-aware follow-up questions"""
+    
+    try:
+        user_message = request.message
+        conversation_id = request.conversation_id
+        additional_context = request.context or {}
+        
+        if not user_message.strip():
+            raise HTTPException(status_code=400, detail="User message is required")
+        
+        # Check rate limiting
+        rate_count = await cache_service.increment_rate_limit(
+            current_user.id,
+            settings.rate_limit_window_minutes * 60
+        )
+        
+        if rate_count > settings.rate_limit_requests:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded. Max {settings.rate_limit_requests} requests per {settings.rate_limit_window_minutes} minutes."
+            )
+        
+        # Get conversation history
+        conversation_history = await cache_service.get_conversation_history(
+            current_user.id, 
+            conversation_id
+        )
+        
+        # Initialize AI service
+        ai_service = AIService()
+        
+        # Generate intelligent follow-up questions
+        followup_result = await ai_service.ask_intelligent_follow_up(
+            conversation_history=conversation_history,
+            user_message=user_message,
+            context=additional_context
+        )
+        
+        # Cache the user message
+        await cache_service.append_to_conversation(
+            current_user.id,
+            {
+                "role": "user",
+                "content": user_message,
+                "timestamp": request.get("timestamp")
+            },
+            conversation_id
+        )
+        
+        # Cache the AI response
+        await cache_service.append_to_conversation(
+            current_user.id,
+            {
+                "role": "assistant",
+                "content": followup_result.get("response", ""),
+                "questions": followup_result.get("questions", []),
+                "completion_status": followup_result.get("completion_status", {}),
+                "timestamp": datetime.now().isoformat()
+            },
+            conversation_id
+        )
+        
+        return {
+            "success": True,
+            "followup": followup_result,
+            "conversation_id": conversation_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in intelligent follow-up: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @router.post("/generate-quote")

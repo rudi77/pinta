@@ -199,18 +199,40 @@ class AIService:
 
     async def ask_follow_up_question_stream(self, conversation_history: List[Dict], 
                                           user_message: str):
-        """Handle follow-up questions with streaming response"""
+        """Handle follow-up questions with streaming response and intelligent questions"""
         
         if not self.enabled:
-            yield self._get_mock_followup_response(user_message)
+            # Stream mock response
+            mock_response = self._get_mock_followup_response(user_message)
+            response_text = mock_response.get("response", "")
+            
+            # Stream the response character by character for realistic effect
+            for char in response_text:
+                yield {
+                    "type": "content",
+                    "content": char
+                }
+                await asyncio.sleep(0.01)  # Small delay for streaming effect
+            
+            # After streaming text, yield intelligent questions if available
+            intelligent_followup = self._get_mock_intelligent_followup(user_message)
+            if intelligent_followup.get("has_follow_up_questions"):
+                yield {
+                    "type": "intelligent_questions",
+                    "questions": intelligent_followup.get("questions", []),
+                    "completion_status": intelligent_followup.get("completion_status", {}),
+                    "suggestions": intelligent_followup.get("suggestions", [])
+                }
+            
+            yield {"type": "done"}
             return
         
         try:
+            # First, stream the natural response
             system_prompt = """Du bist ein hilfsreicher KI-Assistent für Maler-Kostenvoranschläge.
-            Beantworte Fragen des Kunden höflich und kompetent. Wenn zusätzliche Informationen 
-            benötigt werden, stelle gezielte Nachfragen.
+            Beantworte Fragen des Kunden höflich und kompetent. Sei freundlich und professionell.
             
-            Antworte direkt und natürlich, ohne JSON-Formatierung."""
+            Antworte direkt und natürlich, ohne JSON-Formatierung oder zusätzliche Fragen in diesem Teil."""
 
             # Build conversation context
             messages = [{"role": "system", "content": system_prompt}]
@@ -223,20 +245,50 @@ class AIService:
             
             messages.append({"role": "user", "content": user_message})
 
+            # Stream the natural response first
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.7,
-                max_tokens=800,
+                max_tokens=600,
                 stream=True
             )
 
+            full_response = ""
             async for chunk in response:
                 if chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
                     yield {
                         "type": "content",
-                        "content": chunk.choices[0].delta.content
+                        "content": content
                     }
+            
+            # After streaming the response, generate intelligent follow-up questions
+            try:
+                # Update conversation history with the response for context
+                updated_history = conversation_history + [
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": full_response}
+                ]
+                
+                intelligent_followup = await self.ask_intelligent_follow_up(
+                    updated_history, 
+                    user_message
+                )
+                
+                # Stream intelligent questions if available
+                if intelligent_followup.get("has_follow_up_questions"):
+                    yield {
+                        "type": "intelligent_questions",
+                        "questions": intelligent_followup.get("questions", []),
+                        "completion_status": intelligent_followup.get("completion_status", {}),
+                        "suggestions": intelligent_followup.get("suggestions", [])
+                    }
+                
+            except Exception as followup_error:
+                logger.warning(f"Error generating intelligent follow-up in stream: {followup_error}")
+                # Continue without follow-up questions
             
             yield {"type": "done"}
 
@@ -247,59 +299,203 @@ class AIService:
                 "error": str(e)
             }
     
-    async def ask_follow_up_question(self, conversation_history: List[Dict], 
-                                   user_message: str) -> Dict:
-        """Handle follow-up questions in the conversation"""
+    async def ask_intelligent_follow_up(self, conversation_history: List[Dict], 
+                                      user_message: str,
+                                      context: Dict = None) -> Dict:
+        """Generate intelligent context-aware follow-up questions"""
         
         if not self.enabled:
-            return self._get_mock_followup_response(user_message)
+            return self._get_mock_intelligent_followup(user_message, context)
         
         try:
-            system_prompt = """Du bist ein hilfsreicher KI-Assistent für Maler-Kostenvoranschläge.
-            Beantworte Fragen des Kunden höflich und kompetent. Wenn zusätzliche Informationen 
-            benötigt werden, stelle gezielte Nachfragen.
-
+            # Analyze conversation for missing information
+            missing_info = await self._analyze_missing_information(conversation_history)
+            
+            system_prompt = """Du bist ein erfahrener Maler-Experte und KI-Assistent für Kostenvoranschläge.
+            Deine Aufgabe ist es, intelligente und kontextbezogene Nachfragen zu stellen, um alle notwendigen 
+            Informationen für einen präzisen Kostenvoranschlag zu sammeln.
+            
+            Analysiere den bisherigen Gesprächsverlauf und die aktuelle Nachricht des Kunden.
+            Stelle nur dann Nachfragen, wenn wichtige Informationen fehlen oder unklar sind.
+            
+            WICHTIGE REGELN:
+            1. Stelle maximal 2-3 gezielte Fragen pro Antwort
+            2. Priorisiere die wichtigsten fehlenden Informationen
+            3. Berücksichtige bereits gegebene Antworten
+            4. Verwende natürliche, freundliche Sprache
+            5. Biete Multiple-Choice-Optionen für komplexe Fragen an
+            
+            Fokussiere dich auf:
+            - Fehlende Flächenangaben (Quadratmeter, Raumanzahl)
+            - Materialwünsche (Farbtyp, Qualität)
+            - Oberflächenzustand (Vorarbeiten nötig?)
+            - Zeitrahmen und Terminwünsche
+            - Besondere Anforderungen oder Herausforderungen
+            
             Antworte im JSON-Format:
             {
-                "response": "string",
-                "needs_more_info": boolean,
-                "suggested_questions": ["string"] // optional
+                "response": "Natürliche Antwort auf die Kundennachricht",
+                "has_follow_up_questions": boolean,
+                "questions": [
+                    {
+                        "id": "unique_id",
+                        "question": "Konkrete Frage",
+                        "type": "multiple_choice|text|number|yes_no",
+                        "importance": "high|medium|low",
+                        "options": ["option1", "option2"] // nur bei multiple_choice
+                    }
+                ],
+                "completion_status": {
+                    "estimated_completeness": number, // 0-100%
+                    "missing_critical_info": ["info1", "info2"],
+                    "ready_for_quote": boolean
+                },
+                "suggestions": ["Hilfreiche Tipps für den Kunden"]
             }"""
 
-            # Build conversation context
+            # Build conversation context with missing info analysis
             messages = [{"role": "system", "content": system_prompt}]
             
-            for msg in conversation_history[-5:]:  # Last 5 messages for context
+            # Add context about missing information
+            if missing_info:
+                messages.append({
+                    "role": "system", 
+                    "content": f"Fehlende Informationen aus der Analyse: {json.dumps(missing_info, ensure_ascii=False)}"
+                })
+            
+            # Add conversation history
+            for msg in conversation_history[-8:]:  # More context for better analysis
                 messages.append({
                     "role": msg.get("role", "user"),
                     "content": msg.get("content", "")
                 })
             
-            messages.append({"role": "user", "content": user_message})
+            # Add current message with additional context
+            context_info = ""
+            if context:
+                context_info = f"\n\nZusätzlicher Kontext: {json.dumps(context, ensure_ascii=False)}"
+            
+            messages.append({
+                "role": "user", 
+                "content": f"{user_message}{context_info}"
+            })
 
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                temperature=0.7,
-                max_tokens=800
+                temperature=0.6,  # Slightly lower for more consistent questions
+                max_tokens=1200
             )
 
             content = response.choices[0].message.content
             
             try:
+                # Clean JSON from markdown formatting
+                content = content.replace('```json', '').replace('```', '').strip()
                 result = json.loads(content)
+                
+                # Ensure all required fields exist
+                result.setdefault('has_follow_up_questions', False)
+                result.setdefault('questions', [])
+                result.setdefault('completion_status', {
+                    'estimated_completeness': 50,
+                    'missing_critical_info': [],
+                    'ready_for_quote': False
+                })
+                result.setdefault('suggestions', [])
+                
                 return result
-            except json.JSONDecodeError:
-                # Fallback to simple text response
-                return {
-                    "response": content,
-                    "needs_more_info": False,
-                    "suggested_questions": []
-                }
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse intelligent follow-up JSON: {content}")
+                return self._get_mock_intelligent_followup(user_message, context)
 
         except Exception as e:
-            logger.error(f"OpenAI API error in follow-up: {str(e)}")
-            return self._get_mock_followup_response(user_message)
+            logger.error(f"OpenAI API error in intelligent follow-up: {str(e)}")
+            return self._get_mock_intelligent_followup(user_message, context)
+    
+    async def _analyze_missing_information(self, conversation_history: List[Dict]) -> Dict:
+        """Analyze conversation to identify missing critical information"""
+        
+        # Define critical information categories for painting quotes
+        required_info = {
+            "area_info": ["Quadratmeter", "Raumanzahl", "Deckenhöhe"],
+            "surface_info": ["Wandzustand", "Vorarbeiten", "Untergrund"],
+            "material_info": ["Farbwunsch", "Qualität", "Spezialanforderungen"],
+            "timeline_info": ["Zeitrahmen", "Terminwünsche"],
+            "access_info": ["Zugänglichkeit", "Möbel räumen", "Arbeitszeiten"]
+        }
+        
+        missing_categories = []
+        found_info = {}
+        
+        # Analyze conversation content for mentioned information
+        full_conversation = " ".join([msg.get("content", "").lower() for msg in conversation_history])
+        
+        for category, keywords in required_info.items():
+            found_keywords = []
+            for keyword in keywords:
+                # Simple keyword matching (could be enhanced with NLP)
+                if any(term in full_conversation for term in [
+                    keyword.lower(), 
+                    keyword.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").lower()
+                ]):
+                    found_keywords.append(keyword)
+            
+            if found_keywords:
+                found_info[category] = found_keywords
+            else:
+                missing_categories.append(category)
+        
+        return {
+            "missing_categories": missing_categories,
+            "found_info": found_info,
+            "completeness_score": max(0, 100 - (len(missing_categories) * 20))
+        }
+    
+    async def ask_follow_up_question(self, conversation_history: List[Dict], 
+                                   user_message: str) -> Dict:
+        """Handle follow-up questions in the conversation (legacy method)"""
+        
+        # Use the new intelligent follow-up method
+        return await self.ask_intelligent_follow_up(conversation_history, user_message)
+    
+    def _get_mock_intelligent_followup(self, message: str, context: Dict = None) -> Dict:
+        """Enhanced mock response for intelligent follow-up questions"""
+        return {
+            "response": "Vielen Dank für die zusätzlichen Informationen! Um Ihnen einen möglichst genauen Kostenvoranschlag erstellen zu können, habe ich noch ein paar spezifische Fragen.",
+            "has_follow_up_questions": True,
+            "questions": [
+                {
+                    "id": "room_size",
+                    "question": "Wie groß ist der zu streichende Bereich ungefähr?",
+                    "type": "multiple_choice",
+                    "importance": "high",
+                    "options": ["Unter 20 m²", "20-40 m²", "40-80 m²", "Über 80 m²"]
+                },
+                {
+                    "id": "wall_condition",
+                    "question": "Wie ist der aktuelle Zustand der Wände?",
+                    "type": "multiple_choice",
+                    "importance": "high",
+                    "options": ["Neu/sehr gut", "Kleine Risse/Löcher", "Größere Schäden", "Unsicher"]
+                },
+                {
+                    "id": "timeline",
+                    "question": "Bis wann soll das Projekt abgeschlossen sein?",
+                    "type": "text",
+                    "importance": "medium"
+                }
+            ],
+            "completion_status": {
+                "estimated_completeness": 60,
+                "missing_critical_info": ["Flächenangabe", "Oberflächenzustand"],
+                "ready_for_quote": False
+            },
+            "suggestions": [
+                "Fotos der zu streichenden Räume können bei der Kostenschätzung helfen",
+                "Bei größeren Schäden an den Wänden können zusätzliche Vorarbeiten nötig sein"
+            ]
+        }
 
     async def analyze_document(self, file_content: bytes, filename: str, content_type: str) -> Dict:
         """Analyze uploaded document (floor plan, photo) using AI"""
@@ -434,15 +630,9 @@ class AIService:
         }
 
     def _get_mock_followup_response(self, message: str) -> Dict:
-        """Mock response for follow-up questions without OpenAI API"""
-        return {
-            "response": "Vielen Dank für Ihre Antwort. Können Sie mir noch sagen, ob es besondere Wünsche bezüglich der Farbqualität gibt?",
-            "needs_more_info": True,
-            "suggested_questions": [
-                "Möchten Sie eine besonders hochwertige Farbe verwenden?",
-                "Gibt es spezielle Anforderungen an die Haltbarkeit?"
-            ]
-        }
+        """Mock response for follow-up questions without OpenAI API (legacy)"""
+        # Redirect to intelligent follow-up mock
+        return self._get_mock_intelligent_followup(message)
 
     def _get_mock_document_analysis(self) -> Dict:
         """Mock response for document analysis without OpenAI API"""
