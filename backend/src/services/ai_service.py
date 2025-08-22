@@ -14,7 +14,7 @@ class AIService:
         api_key = settings.openai_api_key
         if api_key and api_key != 'test_key_placeholder' and api_key.startswith('sk-'):
             self.client = openai.AsyncOpenAI(api_key=api_key)
-            self.model = "gpt-4.1-mini"
+            self.model = "gpt-4o-mini"  # Updated to use latest fast model
             self.enabled = True
             logger.info("OpenAI client initialized successfully")
         else:
@@ -645,5 +645,194 @@ class AIService:
                 "Deckenhöhe berücksichtigen bei Materialberechnung",
                 "Fensterbereich separat kalkulieren"
             ]
+        }
+
+    # === STREAMING METHODS FOR REAL-TIME RESPONSES ===
+    
+    async def ask_follow_up_question_stream(self, conversation_history: List[Dict], user_message: str):
+        """Stream AI follow-up response in real-time"""
+        
+        if not self.enabled:
+            # Mock streaming response
+            async for chunk in self._get_mock_stream():
+                yield chunk
+            return
+        
+        try:
+            system_prompt = """Du bist ein erfahrener Maler-Experte und hilfst bei Kostenvoranschlägen.
+            Beantworte die Kundenfrage präzise und freundlich. Stelle bei Bedarf 1-2 gezielte Nachfragen
+            für fehlende Informationen. Verwende natürliche, professionelle Sprache."""
+            
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            # Add conversation context (last 6 messages)
+            for msg in conversation_history[-6:]:
+                messages.append({
+                    "role": msg.get("role", "user"),
+                    "content": msg.get("content", "")
+                })
+            
+            messages.append({
+                "role": "user",
+                "content": user_message
+            })
+            
+            # Create streaming completion
+            stream = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=800,
+                stream=True
+            )
+            
+            # Stream the response
+            accumulated_content = ""
+            async for chunk in stream:
+                if chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    accumulated_content += content
+                    yield {
+                        "type": "content",
+                        "content": content
+                    }
+            
+            # Send completion signal
+            yield {
+                "type": "done",
+                "full_content": accumulated_content
+            }
+            
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            yield {
+                "type": "error",
+                "error": str(e)
+            }
+    
+    async def analyze_project_stream(self, description: str, context: str = "initial_input", 
+                                   conversation_history: Optional[List[Dict]] = None):
+        """Stream project analysis with intelligent questions"""
+        
+        if not self.enabled:
+            # Mock streaming response
+            async for chunk in self._get_mock_analysis_stream(description):
+                yield chunk
+            return
+        
+        try:
+            system_prompt = """Du bist ein Maler-Experte und analysierst Projektbeschreibungen.
+            Antworte strukturiert mit Analyse und 2-3 intelligenten Nachfragen.
+            Format: Erst Analyse, dann Fragen mit Aufzählungszeichen."""
+            
+            messages = [{"role": "system", "content": system_prompt}]
+            
+            if conversation_history:
+                for msg in conversation_history[-4:]:
+                    messages.append({
+                        "role": msg.get("role", "user"),
+                        "content": msg.get("content", "")
+                    })
+            
+            messages.append({
+                "role": "user",
+                "content": f"Projektbeschreibung: {description}\n\nBitte analysiere und stelle Nachfragen."
+            })
+            
+            stream = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1000,
+                stream=True
+            )
+            
+            accumulated_content = ""
+            async for chunk in stream:
+                if chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    accumulated_content += content
+                    yield {
+                        "type": "content",
+                        "content": content
+                    }
+            
+            yield {
+                "type": "done",
+                "full_content": accumulated_content
+            }
+            
+        except Exception as e:
+            logger.error(f"Streaming analysis error: {e}")
+            yield {
+                "type": "error",
+                "error": str(e)
+            }
+    
+    async def _get_mock_stream(self):
+        """Mock streaming for testing without OpenAI API"""
+        response_text = """Vielen Dank für Ihre Anfrage! 
+
+Basierend auf Ihrer Beschreibung kann ich bereits einige wichtige Punkte erfassen. 
+
+Um Ihnen einen präzisen Kostenvoranschlag zu erstellen, benötige ich noch einige zusätzliche Informationen:
+
+• Wie groß ist die zu streichende Fläche (in Quadratmetern)?
+• Welche Farbwünsche haben Sie (Farbton, Qualität)?
+
+Mit diesen Details kann ich Ihnen einen detaillierten Kostenvoranschlag erstellen."""
+        
+        # Simulate typing with small chunks
+        words = response_text.split()
+        current_chunk = ""
+        
+        for i, word in enumerate(words):
+            current_chunk += word + " "
+            
+            # Send chunks every 2-3 words
+            if (i + 1) % 3 == 0 or i == len(words) - 1:
+                yield {
+                    "type": "content", 
+                    "content": current_chunk
+                }
+                current_chunk = ""
+                await asyncio.sleep(0.05)  # Small delay for realistic typing
+        
+        yield {
+            "type": "done",
+            "full_content": response_text
+        }
+    
+    async def _get_mock_analysis_stream(self, description: str):
+        """Mock streaming analysis for testing"""
+        response_text = f"""Projektanalyse für: "{description}"
+
+**Erste Einschätzung:**
+- Projekttyp: Innenanstrich
+- Komplexität: Mittel
+- Geschätzte Dauer: 1-2 Tage
+
+**Nachfragen zur Präzisierung:**
+
+• Welche Räume sollen gestrichen werden und wie groß sind diese?
+• Ist eine Grundierung erforderlich oder nur der Deckanstrich?
+• Haben Sie bereits Farbwünsche oder Materialvorstellungen?
+
+Diese Informationen helfen mir, einen genauen Kostenvoranschlag zu erstellen."""
+        
+        # Stream in realistic chunks
+        sentences = response_text.split('\n')
+        
+        for sentence in sentences:
+            if sentence.strip():
+                yield {
+                    "type": "content",
+                    "content": sentence + "\n"
+                }
+                await asyncio.sleep(0.1)
+        
+        yield {
+            "type": "done", 
+            "full_content": response_text
         }
 

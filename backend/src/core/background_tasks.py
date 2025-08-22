@@ -31,13 +31,28 @@ class BackgroundTaskManager:
         """Generate quote in background task"""
         
         try:
+            start_time = datetime.now()
             logger.info(f"Starting background quote generation task {task_id} for user {user_id}")
             
-            # Update task status to processing
-            await self._update_task_status(task_id, "processing", {"progress": 10})
+            # Update task status to processing with ETA
+            await self._update_task_status(task_id, "processing", {
+                "progress": 10, 
+                "message": "Initialisierung...",
+                "estimated_completion": 45  # seconds
+            })
             
-            # Step 1: AI Analysis (40% progress)
+            # Cache task progress for WebSocket updates
+            await cache_service.cache_streaming_session(user_id, task_id, {
+                "type": "quote_generation",
+                "status": "processing",
+                "progress": 10,
+                "start_time": start_time.isoformat()
+            })
+            
+            # Step 1: AI Analysis with performance tracking
             logger.debug(f"Task {task_id}: Starting AI analysis")
+            ai_start_time = datetime.now()
+            
             quote_result = await self.ai_service.process_answers_and_generate_quote(
                 project_data=project_data,
                 answers=answers,
@@ -45,7 +60,14 @@ class BackgroundTaskManager:
                 document_files=document_files
             )
             
-            await self._update_task_status(task_id, "processing", {"progress": 50})
+            ai_duration = (datetime.now() - ai_start_time).total_seconds() * 1000
+            await cache_service.track_response_time(user_id, ai_duration)
+            
+            await self._update_task_status(task_id, "processing", {
+                "progress": 50,
+                "message": "KI-Analyse abgeschlossen, speichere Angebot...",
+                "ai_processing_time": ai_duration
+            })
             
             # Step 2: Save to Database (70% progress)
             logger.debug(f"Task {task_id}: Saving quote to database")

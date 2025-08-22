@@ -2,7 +2,7 @@ import redis.asyncio as redis
 import json
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import timedelta
+from datetime import datetime, timedelta
 from core.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -90,8 +90,8 @@ class CacheService:
             logger.error(f"Error caching conversation: {e}")
     
     async def append_to_conversation(self, user_id: int, message: Dict, 
-                                   conversation_id: str = "default", ttl: int = 3600):
-        """Append message to conversation history"""
+                                   conversation_id: str = "default", ttl: int = 7200):
+        """Append message to conversation history with optimized performance"""
         if not self.enabled:
             return
         
@@ -99,14 +99,18 @@ class CacheService:
             # Get existing conversation
             history = await self.get_conversation_history(user_id, conversation_id)
             
-            # Append new message
-            history.append(message)
+            # Append new message with timestamp
+            message_with_timestamp = {
+                **message,
+                "timestamp": message.get("timestamp", json.dumps(datetime.now(), default=str))
+            }
+            history.append(message_with_timestamp)
             
-            # Keep only last 20 messages to prevent memory issues
-            if len(history) > 20:
-                history = history[-20:]
+            # Keep only last 30 messages for better context (increased from 20)
+            if len(history) > 30:
+                history = history[-30:]
             
-            # Cache updated conversation
+            # Cache updated conversation with longer TTL (2 hours)
             await self.set_conversation_history(user_id, history, conversation_id, ttl)
             
         except Exception as e:
@@ -222,6 +226,113 @@ class CacheService:
         except Exception as e:
             logger.error(f"Error getting rate limit count: {e}")
             return 0
+    
+    # === PERFORMANCE ENHANCEMENTS FOR CHAT ===
+    
+    async def cache_streaming_session(self, user_id: int, session_id: str, 
+                                    data: Dict, ttl: int = 600):
+        """Cache streaming session data for real-time updates"""
+        if not self.enabled:
+            return
+        
+        try:
+            key = f"stream_session:{user_id}:{session_id}"
+            await self.redis_client.setex(
+                key,
+                ttl,
+                json.dumps(data, ensure_ascii=False)
+            )
+            logger.debug(f"Cached streaming session {session_id}")
+            
+        except Exception as e:
+            logger.error(f"Error caching streaming session: {e}")
+    
+    async def get_streaming_session(self, user_id: int, session_id: str) -> Optional[Dict]:
+        """Get streaming session data"""
+        if not self.enabled:
+            return None
+        
+        try:
+            key = f"stream_session:{user_id}:{session_id}"
+            cached_data = await self.redis_client.get(key)
+            
+            if cached_data:
+                return json.loads(cached_data)
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting streaming session: {e}")
+            return None
+    
+    async def cache_ai_context(self, user_id: int, context_data: Dict, ttl: int = 1800):
+        """Cache AI context for faster response generation"""
+        if not self.enabled:
+            return
+        
+        try:
+            key = f"ai_context:{user_id}"
+            await self.redis_client.setex(
+                key,
+                ttl,
+                json.dumps(context_data, ensure_ascii=False)
+            )
+            logger.debug(f"Cached AI context for user {user_id}")
+            
+        except Exception as e:
+            logger.error(f"Error caching AI context: {e}")
+    
+    async def get_ai_context(self, user_id: int) -> Optional[Dict]:
+        """Get cached AI context"""
+        if not self.enabled:
+            return None
+        
+        try:
+            key = f"ai_context:{user_id}"
+            cached_data = await self.redis_client.get(key)
+            
+            if cached_data:
+                return json.loads(cached_data)
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error getting AI context: {e}")
+            return None
+    
+    async def track_response_time(self, user_id: int, response_time_ms: float):
+        """Track response times for performance monitoring"""
+        if not self.enabled:
+            return
+        
+        try:
+            key = f"response_times:{user_id}"
+            # Store as sorted set with timestamp as score
+            timestamp = datetime.now().timestamp()
+            await self.redis_client.zadd(key, {str(response_time_ms): timestamp})
+            
+            # Keep only last 100 response times
+            await self.redis_client.zremrangebyrank(key, 0, -101)
+            await self.redis_client.expire(key, 3600)  # Expire after 1 hour
+            
+        except Exception as e:
+            logger.error(f"Error tracking response time: {e}")
+    
+    async def get_average_response_time(self, user_id: int) -> float:
+        """Get average response time for user"""
+        if not self.enabled:
+            return 0.0
+        
+        try:
+            key = f"response_times:{user_id}"
+            times = await self.redis_client.zrange(key, 0, -1)
+            
+            if times:
+                total = sum(float(time) for time in times)
+                return total / len(times)
+            return 0.0
+            
+        except Exception as e:
+            logger.error(f"Error getting average response time: {e}")
+            return 0.0
 
 # Global cache instance
 cache_service = CacheService()

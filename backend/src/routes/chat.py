@@ -169,6 +169,7 @@ async def analyze_project_description(
     """Analyze project description and return intelligent questions"""
     
     try:
+        start_time = datetime.now()
         description = request.get("description", "")
         context = request.get("context", "initial_input")
         conversation_id = request.get("conversation_id", "default")
@@ -176,50 +177,70 @@ async def analyze_project_description(
         if not description.strip():
             raise HTTPException(status_code=400, detail="Project description is required")
         
-        # Check rate limiting
+        # Check rate limiting with better error message
         rate_count = await cache_service.increment_rate_limit(
             current_user.id,
             settings.rate_limit_window_minutes * 60
         )
         
         if rate_count > settings.rate_limit_requests:
+            retry_after = settings.rate_limit_window_minutes * 60
             raise HTTPException(
                 status_code=429,
-                detail=f"Rate limit exceeded. Max {settings.rate_limit_requests} requests per {settings.rate_limit_window_minutes} minutes."
+                detail=f"Rate limit exceeded. Max {settings.rate_limit_requests} requests per {settings.rate_limit_window_minutes} minutes.",
+                headers={"Retry-After": str(retry_after)}
             )
         
-        # Get conversation history
+        # Get conversation history from cache
         conversation_history = await cache_service.get_conversation_history(
             current_user.id, 
             conversation_id
         )
         
+        # Check for cached AI context to speed up response
+        ai_context = await cache_service.get_ai_context(current_user.id)
+        
         # Initialize AI service
         ai_service = AIService()
         
-        # Analyze project
+        # Analyze project with context
         analysis_result = await ai_service.analyze_project_description(
             description=description,
             context=context,
             conversation_history=conversation_history
         )
         
-        # Cache the analysis
+        # Track performance
+        processing_time = (datetime.now() - start_time).total_seconds() * 1000
+        await cache_service.track_response_time(current_user.id, processing_time)
+        
+        # Cache the user input and AI context
+        user_message = {
+            "role": "user",
+            "content": description,
+            "context": context,
+            "timestamp": request.get("timestamp", datetime.now().isoformat())
+        }
+        
         await cache_service.append_to_conversation(
             current_user.id,
-            {
-                "role": "user",
-                "content": description,
-                "context": context,
-                "timestamp": request.get("timestamp")
-            },
+            user_message,
             conversation_id
         )
+        
+        # Cache AI context for future requests
+        await cache_service.cache_ai_context(current_user.id, {
+            "last_analysis": analysis_result,
+            "project_context": description,
+            "conversation_id": conversation_id
+        })
         
         return {
             "success": True,
             "analysis": analysis_result,
-            "conversation_id": conversation_id
+            "conversation_id": conversation_id,
+            "processing_time_ms": processing_time,
+            "cached_context": ai_context is not None
         }
         
     except HTTPException:
@@ -429,4 +450,103 @@ async def clear_conversation_history(
         
     except Exception as e:
         logger.error(f"Error clearing conversation history: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.post("/stream-analysis")
+async def stream_project_analysis(
+    request: Dict,
+    current_user: User = Depends(get_current_user)
+):
+    """Stream project analysis in real-time (Server-Sent Events alternative)"""
+    
+    try:
+        description = request.get("description", "")
+        context = request.get("context", "initial_input") 
+        conversation_id = request.get("conversation_id", "default")
+        
+        if not description.strip():
+            raise HTTPException(status_code=400, detail="Project description is required")
+        
+        # Rate limiting check
+        rate_count = await cache_service.get_rate_limit_count(current_user.id)
+        if rate_count > settings.rate_limit_requests:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+        
+        # Get conversation history
+        conversation_history = await cache_service.get_conversation_history(
+            current_user.id, 
+            conversation_id
+        )
+        
+        # Initialize AI service
+        ai_service = AIService()
+        
+        # Create streaming generator
+        async def generate_stream():
+            try:
+                # Stream the analysis
+                async for chunk in ai_service.analyze_project_stream(
+                    description=description,
+                    context=context,
+                    conversation_history=conversation_history
+                ):
+                    yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                
+                # Cache the conversation after completion
+                await cache_service.append_to_conversation(
+                    current_user.id,
+                    {
+                        "role": "user",
+                        "content": description,
+                        "context": context,
+                        "timestamp": datetime.now().isoformat()
+                    },
+                    conversation_id
+                )
+                
+            except Exception as e:
+                error_chunk = {
+                    "type": "error",
+                    "error": str(e)
+                }
+                yield f"data: {json.dumps(error_chunk)}\n\n"
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/plain",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"  # Disable nginx buffering
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in streaming analysis: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/performance-stats")
+async def get_performance_stats(
+    current_user: User = Depends(get_current_user)
+):
+    """Get performance statistics for current user"""
+    
+    try:
+        avg_response_time = await cache_service.get_average_response_time(current_user.id)
+        rate_limit_count = await cache_service.get_rate_limit_count(current_user.id)
+        
+        return {
+            "success": True,
+            "stats": {
+                "average_response_time_ms": avg_response_time,
+                "current_rate_limit_count": rate_limit_count,
+                "rate_limit_max": settings.rate_limit_requests,
+                "rate_limit_window_minutes": settings.rate_limit_window_minutes
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting performance stats: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")

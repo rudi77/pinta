@@ -86,49 +86,87 @@ class ConnectionManager:
                 self.disconnect(websocket)
     
     async def send_streaming_response(self, user_id: int, stream_generator, task_id: str = None):
-        """Send streaming AI response to user"""
+        """Send streaming AI response to user with enhanced performance"""
         if user_id not in self.active_connections:
+            logger.warning(f"No active connections for user {user_id}")
             return
         
         try:
-            # Send stream start notification
+            import time
+            start_time = time.time()
+            
+            # Send stream start notification with metadata
             await self.send_to_user({
                 "type": "stream_start",
                 "task_id": task_id,
-                "message": "AI response streaming started"
+                "message": "AI response streaming started",
+                "timestamp": time.time(),
+                "expected_duration": "2-5 seconds"
             }, user_id)
             
-            # Stream content
+            # Stream content with buffering for better performance
+            content_buffer = ""
+            chunk_count = 0
+            
             async for chunk in stream_generator:
+                chunk_count += 1
+                
                 if chunk.get("type") == "content":
-                    await self.send_to_user({
-                        "type": "stream_content",
-                        "task_id": task_id,
-                        "content": chunk["content"]
-                    }, user_id)
+                    content = chunk.get("content", "")
+                    content_buffer += content
+                    
+                    # Send chunks in reasonable batches (every 50 characters or 10 chunks)
+                    if len(content_buffer) >= 50 or chunk_count % 10 == 0:
+                        await self.send_to_user({
+                            "type": "stream_content",
+                            "task_id": task_id,
+                            "content": content_buffer,
+                            "chunk_number": chunk_count
+                        }, user_id)
+                        content_buffer = ""
+                        
+                        # Adaptive delay based on connection count
+                        connection_count = len(self.active_connections.get(user_id, set()))
+                        delay = 0.005 if connection_count == 1 else 0.01
+                        await asyncio.sleep(delay)
+                
                 elif chunk.get("type") == "done":
+                    # Send any remaining buffer
+                    if content_buffer:
+                        await self.send_to_user({
+                            "type": "stream_content",
+                            "task_id": task_id,
+                            "content": content_buffer,
+                            "chunk_number": chunk_count
+                        }, user_id)
+                    
+                    # Send completion with stats
+                    total_time = time.time() - start_time
                     await self.send_to_user({
                         "type": "stream_complete",
                         "task_id": task_id,
-                        "message": "Streaming completed"
+                        "message": "Streaming completed",
+                        "full_content": chunk.get("full_content"),
+                        "total_chunks": chunk_count,
+                        "total_time_seconds": total_time
                     }, user_id)
+                    
                 elif chunk.get("type") == "error":
                     await self.send_to_user({
                         "type": "stream_error",
                         "task_id": task_id,
-                        "error": chunk["error"]
+                        "error": chunk["error"],
+                        "partial_content": content_buffer if content_buffer else None
                     }, user_id)
                     break
-                
-                # Small delay to prevent overwhelming the client
-                await asyncio.sleep(0.01)
                 
         except Exception as e:
             logger.error(f"Error in streaming response: {e}")
             await self.send_to_user({
                 "type": "stream_error",
                 "task_id": task_id,
-                "error": str(e)
+                "error": str(e),
+                "message": "Streaming interrupted due to technical issue"
             }, user_id)
     
     async def send_task_update(self, user_id: int, task_id: str, status: str, data: Dict = None):
