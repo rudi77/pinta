@@ -7,15 +7,15 @@ import logging
 from typing import Dict, List, Optional
 from datetime import datetime
 
-from core.database import get_db
-from core.cache import cache_service
-from core.websocket_manager import websocket_manager
-from core.background_tasks import background_task_manager
-from core.security import get_current_user
-from services.ai_service import AIService
-from models.models import User
-from core.settings import settings
-from schemas.schemas import IntelligentFollowUpRequest, IntelligentFollowUpResponse
+from src.core.database import get_db
+from src.core.cache import cache_service
+from src.core.websocket_manager import websocket_manager
+from src.core.background_tasks import background_task_manager
+from src.core.security import get_current_user
+from src.services.ai_service import AIService
+from src.models.models import User
+from src.core.settings import settings
+from src.schemas.schemas import IntelligentFollowUpRequest, IntelligentFollowUpResponse
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 logger = logging.getLogger(__name__)

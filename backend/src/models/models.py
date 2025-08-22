@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, Text, DateTime, Boolean, 
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
-from core.database import Base
+from src.core.database import Base
 import uuid
 
 class User(Base):
@@ -211,7 +211,7 @@ class UsageTracking(Base):
     amount = Column(Integer, default=1)
     
     # Metadata
-    metadata = Column(Text)  # JSON metadata about the action
+    action_metadata = Column(Text)  # JSON metadata about the action
     ip_address = Column(String(45))
     user_agent = Column(String(500))
     

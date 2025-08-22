@@ -1,8 +1,8 @@
 import stripe
 from flask import current_app
 from datetime import datetime, timedelta
-from src.models.models import db, User, Payment
-from core.settings import settings
+from src.models.models import User, Payment
+from src.core.settings import settings
 
 class StripeService:
     def __init__(self):

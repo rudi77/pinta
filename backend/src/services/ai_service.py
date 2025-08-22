@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import logging
 import base64
-from core.settings import settings
+from src.core.settings import settings
 
 logger = logging.getLogger(__name__)
 

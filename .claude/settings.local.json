@@ -4,7 +4,8 @@
       "WebSearch",
       "Bash(python -m alembic revision:*)",
       "Bash(cp:*)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(move teststest_document_processing.py testsold)"
     ],
     "deny": [],
     "ask": [],

@@ -15,12 +15,17 @@ import pytesseract
 import pdf2image
 from pdf2image import convert_from_path
 import pandas as pd
-import camelot
-import tabula
-import easyocr
+try:
+    import pdfplumber  # Replacement for camelot
+except ImportError:
+    pdfplumber = None
+try:
+    import tabula
+except ImportError:
+    tabula = None
 
-from core.settings import settings
-from core.cache import cache_service
+from src.core.settings import settings
+from src.core.cache import cache_service
 
 logger = logging.getLogger(__name__)
 

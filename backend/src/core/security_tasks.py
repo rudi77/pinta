@@ -1,8 +1,8 @@
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from core.security import cleanup_expired_blacklist
-from core.cache import cache_service
+from src.core.security import cleanup_expired_blacklist
+from src.core.cache import cache_service
 
 logger = logging.getLogger(__name__)
 

@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 import uuid
 import logging
-from core.settings import settings
-from core.cache import cache_service
+from src.core.settings import settings
+from src.core.cache import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -202,15 +202,14 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from core.database import get_db
-from models.models import User
+from src.core.database import get_db
 
 security = HTTPBearer()
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
-) -> User:
+):
     """Get current authenticated user with enhanced security checks"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -244,7 +243,8 @@ async def get_current_user(
         logger.warning(f"JWT error: {e}")
         raise credentials_exception
     
-    # Get user from database
+    # Get user from database (import User locally to avoid circular imports)
+    from src.models.models import User
     result = await db.execute(select(User).where(User.id == user_id, User.email == email))
     user = result.scalar_one_or_none()
     
@@ -253,7 +253,7 @@ async def get_current_user(
         
     return user
 
-async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
+async def get_current_active_user(current_user = Depends(get_current_user)):
     """Get current active user"""
     if not current_user.is_active:
         raise HTTPException(status_code=403, detail="Account deactivated")
@@ -262,7 +262,7 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 async def get_refresh_token_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
-) -> User:
+):
     """Validate refresh token and get user"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -291,7 +291,8 @@ async def get_refresh_token_user(
         logger.warning(f"Refresh token error: {e}")
         raise credentials_exception
     
-    # Get user from database
+    # Get user from database (import User locally to avoid circular imports)
+    from src.models.models import User
     result = await db.execute(select(User).where(User.id == user_id, User.email == email))
     user = result.scalar_one_or_none()
     

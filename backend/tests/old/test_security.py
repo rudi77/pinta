@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from jose import jwt
 
-from src.main import app
+# Remove main import to avoid table conflicts
 from src.core.security import (
     create_access_token, create_refresh_token, create_token_pair,
     verify_token, verify_refresh_token, blacklist_token, 
@@ -17,7 +17,10 @@ from src.core.settings import settings
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    # Create minimal FastAPI app for testing
+    from fastapi import FastAPI
+    test_app = FastAPI()
+    return TestClient(test_app)
 
 @pytest.fixture
 def user_data():

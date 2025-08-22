@@ -7,10 +7,10 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from core.database import AsyncSessionLocal
-from core.cache import cache_service
-from services.ai_service import AIService
-from models.models import Quote, QuoteItem, User, Document
+from src.core.database import AsyncSessionLocal
+from src.core.cache import cache_service
+from src.services.ai_service import AIService
+from src.models.models import Quote, QuoteItem, User, Document
 
 logger = logging.getLogger(__name__)
 

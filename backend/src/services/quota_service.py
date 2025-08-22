@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, and_, desc
 from sqlalchemy.orm import selectinload
 
-from models.models import User, Quote, Document
-from core.cache import cache_service
-from core.settings import settings
+from src.models.models import User, Quote, Document
+from src.core.cache import cache_service
+from src.core.settings import settings
 
 logger = logging.getLogger(__name__)
 

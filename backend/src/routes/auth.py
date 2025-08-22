@@ -5,15 +5,15 @@ from sqlalchemy import select
 from typing import Optional
 import logging
 
-from core.database import get_db
-from core.security import (
+from src.core.database import get_db
+from src.core.security import (
     verify_password, get_password_hash, create_token_pair, 
     blacklist_token, revoke_all_user_tokens,
     get_current_user, get_current_active_user, get_refresh_token_user,
     check_auth_rate_limit
 )
-from models.models import User
-from schemas.schemas import UserCreate, UserResponse, LoginRequest, Token, SuccessResponse
+from src.models.models import User
+from src.schemas.schemas import UserCreate, UserResponse, LoginRequest, Token, SuccessResponse
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 security = HTTPBearer()

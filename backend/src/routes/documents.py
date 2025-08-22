@@ -10,13 +10,13 @@ import json
 import logging
 from datetime import datetime
 
-from core.database import get_db
-from core.security import get_current_user
-from core.cache import cache_service
-from core.websocket_manager import websocket_manager
-from services.document_service import document_processor
-from models.models import User, Document, Quote
-from core.settings import settings
+from src.core.database import get_db
+from src.core.security import get_current_user
+from src.core.cache import cache_service
+from src.core.websocket_manager import websocket_manager
+from src.services.document_service import document_processor
+from src.models.models import User, Document, Quote
+from src.core.settings import settings
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 logger = logging.getLogger(__name__)
@@ -183,7 +183,7 @@ async def start_batch_processing(uploaded_files: List[Dict], user_id: int, optio
         )
         
         # Update database with results
-        from core.database import AsyncSessionLocal
+        from src.core.database import AsyncSessionLocal
         async with AsyncSessionLocal() as db:
             for i, (uploaded_file, result) in enumerate(zip(uploaded_files, results)):
                 document_id = uploaded_file["document_id"]

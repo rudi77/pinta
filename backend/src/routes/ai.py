@@ -25,7 +25,7 @@ from src.schemas.schemas import (
     DocumentResponse,
     ErrorResponse
 )
-from src.database import get_db
+from src.core.database import get_db
 from .quotes import generate_quote_number
 
 router = APIRouter(tags=["AI"])

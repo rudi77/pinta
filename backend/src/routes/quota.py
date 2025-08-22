@@ -4,11 +4,11 @@ from sqlalchemy import select, update, and_, desc
 from typing import Optional, List, Dict
 from datetime import datetime, timedelta, timezone
 
-from core.database import get_db
-from core.security import get_current_user, get_current_active_user
-from services.quota_service import QuotaService
-from models.models import User, UsageTracking, QuotaNotification
-from schemas.schemas import SuccessResponse
+from src.core.database import get_db
+from src.core.security import get_current_user, get_current_active_user
+from src.services.quota_service import QuotaService
+from src.models.models import User, UsageTracking, QuotaNotification
+from src.schemas.schemas import SuccessResponse
 
 router = APIRouter(prefix="/api/v1/quota", tags=["quota"])
 quota_service = QuotaService()

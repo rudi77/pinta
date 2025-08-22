@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings
-from pydantic import validator
-from typing import List
+from pydantic import field_validator, computed_field
+from typing import List, Union
 import os
 
 
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     
     # CORS
-    allowed_origins: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    allowed_origins: Union[str, List[str]] = "http://localhost:5173,http://localhost:3000"
     
     # Stripe
     stripe_secret_key: str = ""
@@ -48,15 +48,25 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 5
     rate_limit_window_minutes: int = 15
     
-    @validator('allowed_origins', pre=True)
+    @field_validator('allowed_origins', mode='before')
+    @classmethod
     def parse_cors_origins(cls, v):
         if isinstance(v, str) and v:
             return [origin.strip() for origin in v.split(',') if origin.strip()]
         elif isinstance(v, list):
             return v
-        return ["http://localhost:5173", "http://localhost:3000"]
+        return "http://localhost:5173,http://localhost:3000"
     
-    @validator('secret_key')
+    @computed_field
+    @property
+    def cors_origins(self) -> List[str]:
+        """Get parsed CORS origins as a list"""
+        if isinstance(self.allowed_origins, str):
+            return [origin.strip() for origin in self.allowed_origins.split(',') if origin.strip()]
+        return self.allowed_origins
+    
+    @field_validator('secret_key')
+    @classmethod
     def validate_secret_key(cls, v):
         if not v or len(v) < 32:
             raise ValueError('SECRET_KEY must be at least 32 characters long')

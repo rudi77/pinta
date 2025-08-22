@@ -5,12 +5,12 @@ from contextlib import asynccontextmanager
 import asyncio
 import logging
 
-from core.database import init_db
-from core.cache import cache_service
-from core.websocket_manager import keep_connections_alive
-from core.security_tasks import start_security_tasks, stop_security_tasks, get_security_status
-from core.settings import settings
-from routes import auth, users, quotes, ai, payments, chat, documents, quota
+from src.core.database import init_db
+from src.core.cache import cache_service
+from src.core.websocket_manager import keep_connections_alive
+from src.core.security_tasks import start_security_tasks, stop_security_tasks, get_security_status
+from src.core.settings import settings
+from src.routes import auth, users, quotes, ai, payments, chat, documents, quota
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -53,7 +53,7 @@ app = FastAPI(
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -77,7 +77,7 @@ async def health_check():
 # WebSocket health check
 @app.get("/ws-health")
 async def websocket_health():
-    from core.websocket_manager import websocket_manager
+    from src.core.websocket_manager import websocket_manager
     return {
         "status": "healthy",
         "total_connections": websocket_manager.get_total_connections(),
@@ -87,7 +87,7 @@ async def websocket_health():
 # Background task status
 @app.get("/tasks-health")
 async def tasks_health():
-    from core.background_tasks import background_task_manager
+    from src.core.background_tasks import background_task_manager
     return {
         "status": "healthy",
         "running_tasks": await background_task_manager.get_running_tasks_count()

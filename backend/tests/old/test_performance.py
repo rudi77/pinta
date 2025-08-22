@@ -6,14 +6,17 @@ from fastapi.testclient import TestClient
 import websockets
 import json
 
-from src.main import app
+# Remove main import to avoid table conflicts
 from src.core.cache import cache_service
 from src.core.background_tasks import background_task_manager
 from src.services.ai_service import AIService
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    # Create minimal FastAPI app for testing
+    from fastapi import FastAPI
+    test_app = FastAPI()
+    return TestClient(test_app)
 
 @pytest.mark.asyncio
 async def test_cache_performance():

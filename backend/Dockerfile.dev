@@ -37,6 +37,9 @@ COPY . .
 # Create uploads directory
 RUN mkdir -p uploads
 
+# Set Python path to include src directory
+ENV PYTHONPATH=/app/src
+
 EXPOSE 8000
 
 # Development command with hot reload
