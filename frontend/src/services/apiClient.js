@@ -2,7 +2,8 @@
 
 
 const resolvedBase = (import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : '';
-const API_BASE_URL = (resolvedBase || '') + '/api';
+const apiPrefix = resolvedBase ? '/api/v1' : '/api'
+const API_BASE_URL = (resolvedBase || '') + apiPrefix;
 
 class ApiClient {
   constructor() {
