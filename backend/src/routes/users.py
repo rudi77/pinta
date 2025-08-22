@@ -8,7 +8,7 @@ from src.routes.auth import get_current_user
 from src.models.models import User
 from src.schemas.schemas import UserResponse, UserUpdate, SuccessResponse
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/users", tags=["users"])
 
 @router.get("/profile", response_model=UserResponse)
 async def get_user_profile(current_user: User = Depends(get_current_user)):

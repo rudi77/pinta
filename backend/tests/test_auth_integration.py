@@ -15,7 +15,7 @@ class TestAuthIntegration:
             "company_name": "New Company"
         }
         
-        response = await client.post("/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 201
         
         data = response.json()
@@ -34,7 +34,7 @@ class TestAuthIntegration:
             "company_name": "Company"
         }
         
-        response = await client.post("/auth/register", json=user_data)
+        response = await client.post("/api/v1/auth/register", json=user_data)
         assert response.status_code == 400
         assert "already registered" in response.json()["detail"].lower()
 
@@ -45,7 +45,7 @@ class TestAuthIntegration:
             "password": "testpassword123"
         }
         
-        response = await client.post("/auth/login", data=login_data)
+        response = await client.post("/api/v1/auth/login", data=login_data)
         assert response.status_code == 200
         
         data = response.json()
@@ -61,7 +61,7 @@ class TestAuthIntegration:
             "password": "wrongpassword"
         }
         
-        response = await client.post("/auth/login", data=login_data)
+        response = await client.post("/api/v1/auth/login", data=login_data)
         assert response.status_code == 401
         assert "invalid credentials" in response.json()["detail"].lower()
 
@@ -72,12 +72,12 @@ class TestAuthIntegration:
             "password": "password123"
         }
         
-        response = await client.post("/auth/login", data=login_data)
+        response = await client.post("/api/v1/auth/login", data=login_data)
         assert response.status_code == 401
 
     async def test_get_current_user(self, client: AsyncClient, auth_headers: dict, test_user: User):
         """Test getting current user information"""
-        response = await client.get("/auth/me", headers=auth_headers)
+        response = await client.get("/api/v1/auth/me", headers=auth_headers)
         assert response.status_code == 200
         
         data = response.json()
@@ -88,7 +88,7 @@ class TestAuthIntegration:
 
     async def test_get_current_user_without_auth(self, client: AsyncClient):
         """Test getting current user without authentication"""
-        response = await client.get("/auth/me")
+        response = await client.get("/api/v1/auth/me")
         assert response.status_code == 401
 
     async def test_refresh_token(self, client: AsyncClient, test_user: User):
@@ -99,7 +99,7 @@ class TestAuthIntegration:
             "password": "testpassword123"
         }
         
-        login_response = await client.post("/auth/login", data=login_data)
+        login_response = await client.post("/api/v1/auth/login", data=login_data)
         assert login_response.status_code == 200
         
         tokens = login_response.json()
@@ -107,7 +107,7 @@ class TestAuthIntegration:
         
         # Use refresh token to get new access token
         refresh_data = {"refresh_token": refresh_token}
-        response = await client.post("/auth/refresh", json=refresh_data)
+        response = await client.post("/api/v1/auth/refresh", json=refresh_data)
         assert response.status_code == 200
         
         data = response.json()
@@ -118,18 +118,18 @@ class TestAuthIntegration:
     async def test_refresh_token_invalid(self, client: AsyncClient):
         """Test refresh with invalid token"""
         refresh_data = {"refresh_token": "invalid.token.here"}
-        response = await client.post("/auth/refresh", json=refresh_data)
+        response = await client.post("/api/v1/auth/refresh", json=refresh_data)
         assert response.status_code == 401
 
     async def test_logout(self, client: AsyncClient, auth_headers: dict):
         """Test user logout"""
-        response = await client.post("/auth/logout", headers=auth_headers)
+        response = await client.post("/api/v1/auth/logout", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["message"] == "Successfully logged out"
 
     async def test_logout_without_auth(self, client: AsyncClient):
         """Test logout without authentication"""
-        response = await client.post("/auth/logout")
+        response = await client.post("/api/v1/auth/logout")
         assert response.status_code == 401
 
     async def test_password_change(self, client: AsyncClient, auth_headers: dict):
@@ -139,7 +139,7 @@ class TestAuthIntegration:
             "new_password": "newtestpassword456"
         }
         
-        response = await client.post("/auth/change-password", json=password_data, headers=auth_headers)
+        response = await client.post("/api/v1/auth/change-password", json=password_data, headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["message"] == "Password updated successfully"
 
@@ -150,7 +150,7 @@ class TestAuthIntegration:
             "new_password": "newtestpassword456"
         }
         
-        response = await client.post("/auth/change-password", json=password_data, headers=auth_headers)
+        response = await client.post("/api/v1/auth/change-password", json=password_data, headers=auth_headers)
         assert response.status_code == 400
         assert "current password is incorrect" in response.json()["detail"].lower()
 
@@ -162,13 +162,13 @@ class TestAuthIntegration:
             "password": "testpassword123"
         }
         
-        login_response = await client.post("/auth/login", data=login_data)
+        login_response = await client.post("/api/v1/auth/login", data=login_data)
         tokens = login_response.json()
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
         
         # Logout to blacklist the token
-        await client.post("/auth/logout", headers=headers)
+        await client.post("/api/v1/auth/logout", headers=headers)
         
         # Try to use the blacklisted token
-        response = await client.get("/auth/me", headers=headers)
+        response = await client.get("/api/v1/auth/me", headers=headers)
         assert response.status_code == 401

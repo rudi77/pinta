@@ -17,7 +17,7 @@ class TestDocumentsIntegration:
             "description": "A test document for integration testing"
         }
         
-        response = await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+        response = await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         assert response.status_code == 201
         
         response_data = response.json()
@@ -33,7 +33,7 @@ class TestDocumentsIntegration:
         file_content = b"Test content"
         files = {"file": ("test.pdf", io.BytesIO(file_content), "application/pdf")}
         
-        response = await client.post("/documents/upload", files=files)
+        response = await client.post("/api/v1/documents/upload", files=files)
         assert response.status_code == 401
 
     async def test_upload_invalid_file_type(self, client: AsyncClient, auth_headers: dict):
@@ -41,7 +41,7 @@ class TestDocumentsIntegration:
         file_content = b"Fake executable content"
         files = {"file": ("malicious.exe", io.BytesIO(file_content), "application/x-executable")}
         
-        response = await client.post("/documents/upload", files=files, headers=auth_headers)
+        response = await client.post("/api/v1/documents/upload", files=files, headers=auth_headers)
         assert response.status_code == 400
         assert "file type not allowed" in response.json()["detail"].lower()
 
@@ -51,7 +51,7 @@ class TestDocumentsIntegration:
         large_content = b"x" * (11 * 1024 * 1024)  # 11MB
         files = {"file": ("large_file.pdf", io.BytesIO(large_content), "application/pdf")}
         
-        response = await client.post("/documents/upload", files=files, headers=auth_headers)
+        response = await client.post("/api/v1/documents/upload", files=files, headers=auth_headers)
         assert response.status_code == 413
 
     async def test_get_user_documents(self, client: AsyncClient, auth_headers: dict):
@@ -61,11 +61,11 @@ class TestDocumentsIntegration:
         files = {"file": ("list_test.pdf", io.BytesIO(file_content), "application/pdf")}
         data = {"title": "List Test Document"}
         
-        upload_response = await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+        upload_response = await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         assert upload_response.status_code == 201
         
         # Get documents list
-        response = await client.get("/documents/", headers=auth_headers)
+        response = await client.get("/api/v1/documents/", headers=auth_headers)
         assert response.status_code == 200
         
         documents = response.json()
@@ -84,11 +84,11 @@ class TestDocumentsIntegration:
         files = {"file": ("id_test.pdf", io.BytesIO(file_content), "application/pdf")}
         data = {"title": "ID Test Document"}
         
-        upload_response = await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+        upload_response = await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         document_id = upload_response.json()["id"]
         
         # Get document by ID
-        response = await client.get(f"/documents/{document_id}", headers=auth_headers)
+        response = await client.get(f"/api/v1/documents/{document_id}", headers=auth_headers)
         assert response.status_code == 200
         
         document = response.json()
@@ -97,7 +97,7 @@ class TestDocumentsIntegration:
 
     async def test_get_nonexistent_document(self, client: AsyncClient, auth_headers: dict):
         """Test getting nonexistent document"""
-        response = await client.get("/documents/99999", headers=auth_headers)
+        response = await client.get("/api/v1/documents/99999", headers=auth_headers)
         assert response.status_code == 404
 
     async def test_download_document(self, client: AsyncClient, auth_headers: dict):
@@ -107,11 +107,11 @@ class TestDocumentsIntegration:
         files = {"file": ("download_test.pdf", io.BytesIO(original_content), "application/pdf")}
         data = {"title": "Download Test"}
         
-        upload_response = await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+        upload_response = await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         document_id = upload_response.json()["id"]
         
         # Download the document
-        response = await client.get(f"/documents/{document_id}/download", headers=auth_headers)
+        response = await client.get(f"/api/v1/documents/{document_id}/download", headers=auth_headers)
         assert response.status_code == 200
         assert response.headers["content-type"] == "application/pdf"
         assert "attachment" in response.headers.get("content-disposition", "")
@@ -123,7 +123,7 @@ class TestDocumentsIntegration:
         files = {"file": ("update_test.pdf", io.BytesIO(file_content), "application/pdf")}
         data = {"title": "Original Title"}
         
-        upload_response = await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+        upload_response = await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         document_id = upload_response.json()["id"]
         
         # Update metadata
@@ -132,7 +132,7 @@ class TestDocumentsIntegration:
             "description": "Updated description for the document"
         }
         
-        response = await client.put(f"/documents/{document_id}", json=update_data, headers=auth_headers)
+        response = await client.put(f"/api/v1/documents/{document_id}", json=update_data, headers=auth_headers)
         assert response.status_code == 200
         
         updated_doc = response.json()
@@ -146,15 +146,15 @@ class TestDocumentsIntegration:
         files = {"file": ("delete_test.pdf", io.BytesIO(file_content), "application/pdf")}
         data = {"title": "Document to Delete"}
         
-        upload_response = await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+        upload_response = await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         document_id = upload_response.json()["id"]
         
         # Delete the document
-        response = await client.delete(f"/documents/{document_id}", headers=auth_headers)
+        response = await client.delete(f"/api/v1/documents/{document_id}", headers=auth_headers)
         assert response.status_code == 204
         
         # Verify it's deleted
-        get_response = await client.get(f"/documents/{document_id}", headers=auth_headers)
+        get_response = await client.get(f"/api/v1/documents/{document_id}", headers=auth_headers)
         assert get_response.status_code == 404
 
     @patch('src.services.document_service.DocumentService.extract_text')
@@ -172,11 +172,11 @@ class TestDocumentsIntegration:
         files = {"file": ("text_extract.pdf", io.BytesIO(file_content), "application/pdf")}
         data = {"title": "Text Extraction Test"}
         
-        upload_response = await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+        upload_response = await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         document_id = upload_response.json()["id"]
         
         # Extract text
-        response = await client.post(f"/documents/{document_id}/extract-text", headers=auth_headers)
+        response = await client.post(f"/api/v1/documents/{document_id}/extract-text", headers=auth_headers)
         assert response.status_code == 200
         
         extraction_result = response.json()
@@ -202,11 +202,11 @@ class TestDocumentsIntegration:
         files = {"file": ("floorplan.png", io.BytesIO(file_content), "image/png")}
         data = {"title": "Floor Plan", "document_type": "floor_plan"}
         
-        upload_response = await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+        upload_response = await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         document_id = upload_response.json()["id"]
         
         # Analyze floor plan
-        response = await client.post(f"/documents/{document_id}/analyze-floor-plan", headers=auth_headers)
+        response = await client.post(f"/api/v1/documents/{document_id}/analyze-floor-plan", headers=auth_headers)
         assert response.status_code == 200
         
         analysis = response.json()
@@ -229,10 +229,10 @@ class TestDocumentsIntegration:
             files = {"file": (doc_data['filename'], io.BytesIO(file_content), "application/pdf")}
             data = {"title": doc_data['title']}
             
-            await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+            await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         
         # Search for documents
-        response = await client.get("/documents/?search=kitchen", headers=auth_headers)
+        response = await client.get("/api/v1/documents/?search=kitchen", headers=auth_headers)
         assert response.status_code == 200
         
         documents = response.json()
@@ -254,10 +254,10 @@ class TestDocumentsIntegration:
             files = {"file": (filename, io.BytesIO(file_content), content_type)}
             data = {"title": f"Test {filename}"}
             
-            await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+            await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         
         # Filter by PDF files
-        response = await client.get("/documents/?file_type=application/pdf", headers=auth_headers)
+        response = await client.get("/api/v1/documents/?file_type=application/pdf", headers=auth_headers)
         assert response.status_code == 200
         
         documents = response.json()
@@ -273,7 +273,7 @@ class TestDocumentsIntegration:
         files = {"file": ("private.pdf", io.BytesIO(file_content), "application/pdf")}
         data = {"title": "Private Document"}
         
-        upload_response = await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+        upload_response = await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
         document_id = upload_response.json()["id"]
         
         # Create another user
@@ -285,7 +285,7 @@ class TestDocumentsIntegration:
             "company_name": "Other Company 2"
         }
         
-        await client.post("/auth/register", json=other_user_data)
+        await client.post("/api/v1/auth/register", json=other_user_data)
         
         # Login as other user
         login_data = {
@@ -293,11 +293,11 @@ class TestDocumentsIntegration:
             "password": "password123"
         }
         
-        login_response = await client.post("/auth/login", data=login_data)
+        login_response = await client.post("/api/v1/auth/login", data=login_data)
         other_headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
         
         # Try to access the original user's document
-        response = await client.get(f"/documents/{document_id}", headers=other_headers)
+        response = await client.get(f"/api/v1/documents/{document_id}", headers=other_headers)
         assert response.status_code == 404  # Should not find document from other user
 
     async def test_bulk_document_operations(self, client: AsyncClient, auth_headers: dict):
@@ -309,15 +309,15 @@ class TestDocumentsIntegration:
             files = {"file": (f"bulk_{i}.pdf", io.BytesIO(file_content), "application/pdf")}
             data = {"title": f"Bulk Document {i}"}
             
-            response = await client.post("/documents/upload", files=files, data=data, headers=auth_headers)
+            response = await client.post("/api/v1/documents/upload", files=files, data=data, headers=auth_headers)
             document_ids.append(response.json()["id"])
         
         # Bulk delete
         bulk_data = {"document_ids": document_ids}
-        response = await client.post("/documents/bulk-delete", json=bulk_data, headers=auth_headers)
+        response = await client.post("/api/v1/documents/bulk-delete", json=bulk_data, headers=auth_headers)
         assert response.status_code == 200
         
         # Verify documents are deleted
         for doc_id in document_ids:
-            get_response = await client.get(f"/documents/{doc_id}", headers=auth_headers)
+            get_response = await client.get(f"/api/v1/documents/{doc_id}", headers=auth_headers)
             assert get_response.status_code == 404

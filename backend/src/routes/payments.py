@@ -10,7 +10,7 @@ from src.routes.auth import get_current_user
 from src.models.models import User, Payment
 from src.schemas.schemas import PaymentCreate, PaymentResponse, SuccessResponse
 
-router = APIRouter()
+router = APIRouter(prefix="/api/v1/payments", tags=["payments"])
 
 # Stripe configuration
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")

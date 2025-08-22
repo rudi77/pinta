@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 from typing import AsyncGenerator, Generator
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -28,9 +28,9 @@ def event_loop():
     yield loop
     loop.close()
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 async def test_engine():
-    """Create test database engine"""
+    """Create test database engine for each test"""
     engine = create_async_engine(
         TEST_DATABASE_URL,
         connect_args={"check_same_thread": False},
@@ -38,22 +38,40 @@ async def test_engine():
         echo=False
     )
     
+    # Create tables for each test
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
     yield engine
+    
+    # Clean up
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
 
 @pytest.fixture
 async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Create test database session"""
+    """Create test database session with proper isolation using savepoints"""
+    connection = await test_engine.connect()
+    transaction = await connection.begin()
+    
     TestSessionLocal = async_sessionmaker(
-        test_engine, class_=AsyncSession, expire_on_commit=False
+        bind=connection, class_=AsyncSession, expire_on_commit=False
     )
     
     async with TestSessionLocal() as session:
-        yield session
-        await session.rollback()
+        # Create a savepoint for this test
+        savepoint = await connection.begin_nested()
+        
+        try:
+            yield session
+        finally:
+            # Rollback to savepoint to clean state
+            await savepoint.rollback()
+            await session.close()
+    
+    await transaction.rollback()
+    await connection.close()
 
 def create_test_app():
     """Create FastAPI app for testing without initializing main database"""
@@ -96,7 +114,8 @@ async def client(test_session) -> AsyncGenerator[AsyncClient, None]:
     
     app.dependency_overrides[get_db] = get_test_db
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     
     app.dependency_overrides.clear()
@@ -104,9 +123,11 @@ async def client(test_session) -> AsyncGenerator[AsyncClient, None]:
 @pytest.fixture
 async def test_user(test_session) -> User:
     """Create a test user"""
+    import uuid
+    unique_id = str(uuid.uuid4())[:8]
     user = User(
-        email="test@example.com",
-        username="testuser",
+        email=f"test-{unique_id}@example.com",
+        username=f"testuser-{unique_id}",
         hashed_password=get_password_hash("testpassword123"),
         is_active=True,
         is_verified=True,
@@ -121,9 +142,11 @@ async def test_user(test_session) -> User:
 @pytest.fixture
 async def admin_user(test_session) -> User:
     """Create a test admin user"""
+    import uuid
+    unique_id = str(uuid.uuid4())[:8]
     user = User(
-        email="admin@example.com",
-        username="admin",
+        email=f"admin-{unique_id}@example.com",
+        username=f"admin-{unique_id}",
         hashed_password=get_password_hash("adminpassword123"),
         is_active=True,
         is_verified=True,
@@ -144,7 +167,7 @@ async def auth_headers(client: AsyncClient, test_user: User) -> dict:
         "password": "testpassword123"
     }
     
-    response = await client.post("/auth/login", data=login_data)
+    response = await client.post("/api/v1/auth/login", data=login_data)
     assert response.status_code == 200
     
     token_data = response.json()
@@ -158,7 +181,7 @@ async def admin_auth_headers(client: AsyncClient, admin_user: User) -> dict:
         "password": "adminpassword123"
     }
     
-    response = await client.post("/auth/login", data=login_data)
+    response = await client.post("/api/v1/auth/login", data=login_data)
     assert response.status_code == 200
     
     token_data = response.json()

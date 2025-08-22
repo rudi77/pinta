@@ -5,7 +5,8 @@
       "Bash(python -m alembic revision:*)",
       "Bash(cp:*)",
       "Bash(powershell:*)",
-      "Bash(move teststest_document_processing.py testsold)"
+      "Bash(move teststest_document_processing.py testsold)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": [],

@@ -30,7 +30,7 @@ class TestAIIntegration:
             "room_dimensions": "5m x 5m x 3m height"
         }
         
-        response = await client.post("/ai/analyze-project", json=project_data, headers=auth_headers)
+        response = await client.post("/api/v1/ai/analyze-project", json=project_data, headers=auth_headers)
         assert response.status_code == 200
         
         data = response.json()
@@ -48,7 +48,7 @@ class TestAIIntegration:
             "customer_requirements": "Standard finish"
         }
         
-        response = await client.post("/ai/analyze-project", json=project_data)
+        response = await client.post("/api/v1/ai/analyze-project", json=project_data)
         assert response.status_code == 401
 
     @patch('src.services.ai_service.AIService.generate_quote_suggestions')
@@ -82,7 +82,7 @@ class TestAIIntegration:
             "budget_range": "1000-1500"
         }
         
-        response = await client.post("/ai/quote-suggestions", json=suggestion_data, headers=auth_headers)
+        response = await client.post("/api/v1/ai/quote-suggestions", json=suggestion_data, headers=auth_headers)
         assert response.status_code == 200
         
         data = response.json()
@@ -112,7 +112,7 @@ class TestAIIntegration:
             "efficiency_score": 0.92
         }
         
-        response = await client.post(f"/ai/optimize-quote/{test_quote.id}", headers=auth_headers)
+        response = await client.post(f"/api/v1/ai/optimize-quote/{test_quote.id}", headers=auth_headers)
         assert response.status_code == 200
         
         data = response.json()
@@ -124,7 +124,7 @@ class TestAIIntegration:
 
     async def test_optimize_nonexistent_quote(self, client: AsyncClient, auth_headers: dict):
         """Test optimizing nonexistent quote"""
-        response = await client.post("/ai/optimize-quote/99999", headers=auth_headers)
+        response = await client.post("/api/v1/ai/optimize-quote/99999", headers=auth_headers)
         assert response.status_code == 404
 
     @patch('src.services.ai_service.AIService.generate_recommendations')
@@ -159,7 +159,7 @@ class TestAIIntegration:
             "customer_budget": 2000.00
         }
         
-        response = await client.post("/ai/recommendations", json=recommendation_data, headers=auth_headers)
+        response = await client.post("/api/v1/ai/recommendations", json=recommendation_data, headers=auth_headers)
         assert response.status_code == 200
         
         data = response.json()
@@ -188,7 +188,7 @@ class TestAIIntegration:
             "confidence_level": "high"
         }
         
-        response = await client.post(f"/ai/validate-quote/{test_quote.id}", headers=auth_headers)
+        response = await client.post(f"/api/v1/ai/validate-quote/{test_quote.id}", headers=auth_headers)
         assert response.status_code == 200
         
         data = response.json()
@@ -221,7 +221,7 @@ class TestAIIntegration:
         # Simulate file upload
         files = {"file": ("test_plan.pdf", b"fake pdf content", "application/pdf")}
         
-        response = await client.post("/ai/analyze-document", files=files, headers=auth_headers)
+        response = await client.post("/api/v1/ai/analyze-document", files=files, headers=auth_headers)
         assert response.status_code == 200
         
         data = response.json()
@@ -241,7 +241,7 @@ class TestAIIntegration:
         # Make multiple rapid requests
         responses = []
         for _ in range(10):
-            response = await client.post("/ai/analyze-project", json=project_data, headers=auth_headers)
+            response = await client.post("/api/v1/ai/analyze-project", json=project_data, headers=auth_headers)
             responses.append(response.status_code)
         
         # At least some requests should succeed (exact behavior depends on rate limit config)
@@ -267,7 +267,7 @@ class TestAIIntegration:
             ]
         }
         
-        response = await client.get("/ai/market-insights?location=general", headers=auth_headers)
+        response = await client.get("/api/v1/ai/market-insights?location=general", headers=auth_headers)
         assert response.status_code == 200
         
         data = response.json()

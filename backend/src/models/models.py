@@ -12,6 +12,10 @@ class User(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
+    # Account flags
+    is_verified = Column(Boolean, default=False)
+    is_superuser = Column(Boolean, default=False)
+    phone_number = Column(String(20))
     
     # Profile information
     company_name = Column(String(100))

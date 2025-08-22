@@ -7,7 +7,7 @@ class TestUsersIntegration:
 
     async def test_get_user_profile(self, client: AsyncClient, auth_headers: dict, test_user: User):
         """Test getting user profile"""
-        response = await client.get("/users/profile", headers=auth_headers)
+        response = await client.get("/api/v1/users/profile", headers=auth_headers)
         assert response.status_code == 200
         
         profile = response.json()
@@ -25,7 +25,7 @@ class TestUsersIntegration:
             "phone_number": "+9876543210"
         }
         
-        response = await client.put("/users/profile", json=update_data, headers=auth_headers)
+        response = await client.put("/api/v1/users/profile", json=update_data, headers=auth_headers)
         assert response.status_code == 200
         
         updated_profile = response.json()
@@ -37,12 +37,12 @@ class TestUsersIntegration:
         """Test updating profile without authentication"""
         update_data = {"username": "unauthorized_update"}
         
-        response = await client.put("/users/profile", json=update_data)
+        response = await client.put("/api/v1/users/profile", json=update_data)
         assert response.status_code == 401
 
     async def test_get_user_statistics(self, client: AsyncClient, auth_headers: dict, test_quote):
         """Test getting user statistics"""
-        response = await client.get("/users/statistics", headers=auth_headers)
+        response = await client.get("/api/v1/users/statistics", headers=auth_headers)
         assert response.status_code == 200
         
         stats = response.json()
@@ -54,7 +54,7 @@ class TestUsersIntegration:
 
     async def test_get_user_activity_log(self, client: AsyncClient, auth_headers: dict):
         """Test getting user activity log"""
-        response = await client.get("/users/activity", headers=auth_headers)
+        response = await client.get("/api/v1/users/activity", headers=auth_headers)
         assert response.status_code == 200
         
         activities = response.json()
@@ -66,7 +66,7 @@ class TestUsersIntegration:
 
     async def test_get_user_settings(self, client: AsyncClient, auth_headers: dict):
         """Test getting user settings"""
-        response = await client.get("/users/settings", headers=auth_headers)
+        response = await client.get("/api/v1/users/settings", headers=auth_headers)
         assert response.status_code == 200
         
         settings = response.json()
@@ -88,7 +88,7 @@ class TestUsersIntegration:
             "timezone": "Europe/Berlin"
         }
         
-        response = await client.put("/users/settings", json=settings_data, headers=auth_headers)
+        response = await client.put("/api/v1/users/settings", json=settings_data, headers=auth_headers)
         assert response.status_code == 200
         
         updated_settings = response.json()
@@ -104,7 +104,7 @@ class TestUsersIntegration:
             "reason": "Testing account deactivation"
         }
         
-        response = await client.post("/users/deactivate", json=deactivate_data, headers=auth_headers)
+        response = await client.post("/api/v1/users/deactivate", json=deactivate_data, headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["message"] == "Account deactivated successfully"
 
@@ -115,13 +115,13 @@ class TestUsersIntegration:
             "reason": "Testing with wrong password"
         }
         
-        response = await client.post("/users/deactivate", json=deactivate_data, headers=auth_headers)
+        response = await client.post("/api/v1/users/deactivate", json=deactivate_data, headers=auth_headers)
         assert response.status_code == 400
         assert "password is incorrect" in response.json()["detail"].lower()
 
     async def test_export_user_data(self, client: AsyncClient, auth_headers: dict):
         """Test exporting user data (GDPR compliance)"""
-        response = await client.get("/users/export-data", headers=auth_headers)
+        response = await client.get("/api/v1/users/export-data", headers=auth_headers)
         assert response.status_code == 200
         
         exported_data = response.json()
@@ -143,7 +143,7 @@ class TestUsersIntegration:
         }
         
         # Register user
-        register_response = await client.post("/auth/register", json=user_data)
+        register_response = await client.post("/api/v1/auth/register", json=user_data)
         assert register_response.status_code == 201
         
         # Login
@@ -152,7 +152,7 @@ class TestUsersIntegration:
             "password": "deletepassword123"
         }
         
-        login_response = await client.post("/auth/login", data=login_data)
+        login_response = await client.post("/api/v1/auth/login", data=login_data)
         delete_headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
         
         # Delete user data
@@ -161,13 +161,13 @@ class TestUsersIntegration:
             "confirmation": "DELETE_MY_DATA"
         }
         
-        response = await client.post("/users/delete-data", json=delete_data, headers=delete_headers)
+        response = await client.post("/api/v1/users/delete-data", json=delete_data, headers=delete_headers)
         assert response.status_code == 200
         assert response.json()["message"] == "User data deleted successfully"
 
     async def test_admin_get_all_users(self, client: AsyncClient, admin_auth_headers: dict, test_user: User):
         """Test admin endpoint to get all users"""
-        response = await client.get("/users/admin/all", headers=admin_auth_headers)
+        response = await client.get("/api/v1/users/admin/all", headers=admin_auth_headers)
         assert response.status_code == 200
         
         users = response.json()
@@ -181,12 +181,12 @@ class TestUsersIntegration:
 
     async def test_admin_get_all_users_unauthorized(self, client: AsyncClient, auth_headers: dict):
         """Test admin endpoint access by regular user"""
-        response = await client.get("/users/admin/all", headers=auth_headers)
+        response = await client.get("/api/v1/users/admin/all", headers=auth_headers)
         assert response.status_code == 403
 
     async def test_admin_get_user_by_id(self, client: AsyncClient, admin_auth_headers: dict, test_user: User):
         """Test admin endpoint to get specific user"""
-        response = await client.get(f"/users/admin/{test_user.id}", headers=admin_auth_headers)
+        response = await client.get(f"/api/v1/users/admin/{test_user.id}", headers=admin_auth_headers)
         assert response.status_code == 200
         
         user_data = response.json()
@@ -202,7 +202,7 @@ class TestUsersIntegration:
             "notes": "Account suspended by admin"
         }
         
-        response = await client.put(f"/users/admin/{test_user.id}", json=update_data, headers=admin_auth_headers)
+        response = await client.put(f"/api/v1/users/admin/{test_user.id}", json=update_data, headers=admin_auth_headers)
         assert response.status_code == 200
         
         updated_user = response.json()
@@ -211,7 +211,7 @@ class TestUsersIntegration:
 
     async def test_admin_user_statistics(self, client: AsyncClient, admin_auth_headers: dict):
         """Test admin getting system-wide user statistics"""
-        response = await client.get("/users/admin/statistics", headers=admin_auth_headers)
+        response = await client.get("/api/v1/users/admin/statistics", headers=admin_auth_headers)
         assert response.status_code == 200
         
         stats = response.json()
@@ -223,7 +223,7 @@ class TestUsersIntegration:
 
     async def test_user_quota_information(self, client: AsyncClient, auth_headers: dict):
         """Test getting user quota information"""
-        response = await client.get("/users/quota", headers=auth_headers)
+        response = await client.get("/api/v1/users/quota", headers=auth_headers)
         assert response.status_code == 200
         
         quota = response.json()
@@ -236,7 +236,7 @@ class TestUsersIntegration:
 
     async def test_user_subscription_info(self, client: AsyncClient, auth_headers: dict):
         """Test getting user subscription information"""
-        response = await client.get("/users/subscription", headers=auth_headers)
+        response = await client.get("/api/v1/users/subscription", headers=auth_headers)
         assert response.status_code == 200
         
         subscription = response.json()
@@ -246,7 +246,7 @@ class TestUsersIntegration:
 
     async def test_user_notifications(self, client: AsyncClient, auth_headers: dict):
         """Test getting user notifications"""
-        response = await client.get("/users/notifications", headers=auth_headers)
+        response = await client.get("/api/v1/users/notifications", headers=auth_headers)
         assert response.status_code == 200
         
         notifications = response.json()
@@ -263,17 +263,17 @@ class TestUsersIntegration:
     async def test_mark_notification_as_read(self, client: AsyncClient, auth_headers: dict):
         """Test marking notification as read"""
         # First get notifications
-        notifications_response = await client.get("/users/notifications", headers=auth_headers)
+        notifications_response = await client.get("/api/v1/users/notifications", headers=auth_headers)
         notifications = notifications_response.json()
         
         if notifications:
             notification_id = notifications[0]["id"]
             
-            response = await client.put(f"/users/notifications/{notification_id}/read", headers=auth_headers)
+            response = await client.put(f"/api/v1/users/notifications/{notification_id}/read", headers=auth_headers)
             assert response.status_code == 200
             
             # Verify notification is marked as read
-            updated_response = await client.get("/users/notifications", headers=auth_headers)
+            updated_response = await client.get("/api/v1/users/notifications", headers=auth_headers)
             updated_notifications = updated_response.json()
             
             updated_notification = next((n for n in updated_notifications if n["id"] == notification_id), None)
@@ -283,7 +283,7 @@ class TestUsersIntegration:
     async def test_user_preferences(self, client: AsyncClient, auth_headers: dict):
         """Test getting and updating user preferences"""
         # Get current preferences
-        get_response = await client.get("/users/preferences", headers=auth_headers)
+        get_response = await client.get("/api/v1/users/preferences", headers=auth_headers)
         assert get_response.status_code == 200
         
         preferences = get_response.json()
@@ -299,7 +299,7 @@ class TestUsersIntegration:
             "auto_save_quotes": True
         }
         
-        put_response = await client.put("/users/preferences", json=update_data, headers=auth_headers)
+        put_response = await client.put("/api/v1/users/preferences", json=update_data, headers=auth_headers)
         assert put_response.status_code == 200
         
         updated_preferences = put_response.json()

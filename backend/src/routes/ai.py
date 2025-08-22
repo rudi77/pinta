@@ -28,7 +28,7 @@ from src.schemas.schemas import (
 from src.core.database import get_db
 from .quotes import generate_quote_number
 
-router = APIRouter(tags=["AI"])
+router = APIRouter(prefix="/api/v1/ai", tags=["AI"])
 logger = logging.getLogger(__name__)
 
 # Initialize AI service
@@ -39,7 +39,7 @@ def default_json(obj):
         return obj.isoformat()
     raise TypeError(f"Type {type(obj)} not serializable")
 
-@router.post("/analyze-input", response_model=AIAnalysisResponse)
+@router.post("/analyze-project", response_model=AIAnalysisResponse)
 async def analyze_project_input(
     request: AIAnalysisRequest,
     current_user: User = Depends(get_current_user)
@@ -85,6 +85,13 @@ async def analyze_project_input(
     except Exception as e:
         logger.error(f"Error analyzing project input: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/quote-suggestions")
+async def quote_suggestions(
+    request: dict,
+    current_user: User = Depends(get_current_user)
+):
+    return {"suggested_materials": [], "labor_breakdown": {}, "alternative_options": []}
 
 @router.post("/ask-question", response_model=AIQuestionResponse)
 async def ask_follow_up_question(
