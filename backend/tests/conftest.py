@@ -51,27 +51,17 @@ async def test_engine():
 
 @pytest.fixture
 async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Create test database session with proper isolation using savepoints"""
-    connection = await test_engine.connect()
-    transaction = await connection.begin()
-    
+    """Create test database session with simple transaction management"""
     TestSessionLocal = async_sessionmaker(
-        bind=connection, class_=AsyncSession, expire_on_commit=False
+        bind=test_engine, class_=AsyncSession, expire_on_commit=False
     )
     
     async with TestSessionLocal() as session:
-        # Create a savepoint for this test
-        savepoint = await connection.begin_nested()
-        
         try:
             yield session
         finally:
-            # Rollback to savepoint to clean state
-            await savepoint.rollback()
+            await session.rollback()
             await session.close()
-    
-    await transaction.rollback()
-    await connection.close()
 
 def create_test_app():
     """Create FastAPI app for testing without initializing main database"""
@@ -163,11 +153,11 @@ async def admin_user(test_session) -> User:
 async def auth_headers(client: AsyncClient, test_user: User) -> dict:
     """Get authentication headers for test user"""
     login_data = {
-        "username": test_user.email,
+        "email": test_user.email,
         "password": "testpassword123"
     }
     
-    response = await client.post("/api/v1/auth/login", data=login_data)
+    response = await client.post("/api/v1/auth/login", json=login_data)
     assert response.status_code == 200
     
     token_data = response.json()
@@ -177,11 +167,11 @@ async def auth_headers(client: AsyncClient, test_user: User) -> dict:
 async def admin_auth_headers(client: AsyncClient, admin_user: User) -> dict:
     """Get authentication headers for admin user"""
     login_data = {
-        "username": admin_user.email,
+        "email": admin_user.email,
         "password": "adminpassword123"
     }
     
-    response = await client.post("/api/v1/auth/login", data=login_data)
+    response = await client.post("/api/v1/auth/login", json=login_data)
     assert response.status_code == 200
     
     token_data = response.json()

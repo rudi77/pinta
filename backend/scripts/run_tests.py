@@ -12,16 +12,16 @@ from pathlib import Path
 
 def run_command(cmd, description):
     """Run a command and handle errors"""
-    print(f"\n🚀 {description}")
-    print(f"Running: {' '.join(cmd)}")
+    print(f"\n[RUNNING] {description}")
+    print(f"Command: {' '.join(cmd)}")
     print("-" * 50)
     
     result = subprocess.run(cmd, capture_output=False)
     if result.returncode != 0:
-        print(f"❌ {description} failed!")
+        print(f"[FAILED] {description} failed!")
         return False
     else:
-        print(f"✅ {description} completed successfully!")
+        print(f"[SUCCESS] {description} completed successfully!")
         return True
 
 def main():
@@ -88,7 +88,7 @@ def main():
     success = run_command(cmd, description)
     
     if args.test_type == "coverage":
-        print(f"\n📊 Coverage report generated in htmlcov/index.html")
+        print(f"\n[INFO] Coverage report generated in htmlcov/index.html")
     
     sys.exit(0 if success else 1)
 

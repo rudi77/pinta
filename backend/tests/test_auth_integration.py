@@ -41,11 +41,11 @@ class TestAuthIntegration:
     async def test_user_login_success(self, client: AsyncClient, test_user: User):
         """Test successful user login"""
         login_data = {
-            "username": test_user.email,
+            "email": test_user.email,
             "password": "testpassword123"
         }
         
-        response = await client.post("/api/v1/auth/login", data=login_data)
+        response = await client.post("/api/v1/auth/login", json=login_data)
         assert response.status_code == 200
         
         data = response.json()
@@ -57,7 +57,7 @@ class TestAuthIntegration:
     async def test_user_login_invalid_credentials(self, client: AsyncClient, test_user: User):
         """Test login with invalid credentials"""
         login_data = {
-            "username": test_user.email,
+            "email": test_user.email,
             "password": "wrongpassword"
         }
         

@@ -23,6 +23,10 @@ try:
     import tabula
 except ImportError:
     tabula = None
+try:
+    import easyocr
+except ImportError:
+    easyocr = None
 
 from src.core.settings import settings
 from src.core.cache import cache_service
@@ -47,9 +51,13 @@ class DocumentProcessor:
     def _init_easyocr(self):
         """Initialize EasyOCR reader for German text and handwriting"""
         try:
-            # Support for German and English, with handwriting model
-            self.easyocr_reader = easyocr.Reader(['de', 'en'])
-            logger.info("EasyOCR initialized successfully for German/English")
+            if easyocr is not None:
+                # Support for German and English, with handwriting model
+                self.easyocr_reader = easyocr.Reader(['de', 'en'])
+                logger.info("EasyOCR initialized successfully for German/English")
+            else:
+                logger.warning("EasyOCR not available, skipping initialization")
+                self.easyocr_reader = None
         except Exception as e:
             logger.warning(f"EasyOCR initialization failed: {e}")
             self.easyocr_reader = None

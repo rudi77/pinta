@@ -1,0 +1,266 @@
+@startuml "KI-Kostenvoranschlag System - C4 Context Diagram"
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title System Context - KI-gestützter Kostenvoranschlags-Generator
+
+Person(painter, "Maler/Painter", "Small to medium painting company owner who needs to create professional cost estimates")
+Person(customer, "Customer", "End customer who receives cost estimates via email")
+
+System(kostensystem, "KI-Kostenvoranschlag System", "AI-powered cost estimation system for painting companies with OCR document analysis and intelligent quote generation")
+
+System_Ext(openai, "OpenAI GPT-4", "AI service for natural language processing and intelligent question generation")
+System_Ext(tesseract, "Tesseract OCR", "OCR service for document text extraction and plan analysis")
+System_Ext(craftmypdf, "CraftMyPDF", "Professional PDF generation service for branded cost estimates")
+System_Ext(stripe, "Stripe", "Payment processing for freemium subscriptions and additional quote purchases")
+System_Ext(smtp, "Email Service", "SMTP service for automated email delivery of cost estimates")
+
+Rel(painter, kostensystem, "Creates cost estimates using natural language input and document uploads", "HTTPS")
+Rel(customer, kostensystem, "Receives cost estimates", "Email")
+
+Rel(kostensystem, openai, "Processes natural language input and generates intelligent follow-up questions", "API/HTTPS")
+Rel(kostensystem, tesseract, "Extracts text and measurements from uploaded building plans and photos", "Local Process")
+Rel(kostensystem, craftmypdf, "Generates professional branded PDF cost estimates", "API/HTTPS")
+Rel(kostensystem, stripe, "Processes payments for premium subscriptions and additional quotes", "Webhooks/API")
+Rel(kostensystem, smtp, "Sends cost estimate PDFs to customers", "SMTP/TLS")
+
+@enduml
+
+@startuml "KI-Kostenvoranschlag System - C4 Container Diagram"
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Container Diagram - KI-gestützter Kostenvoranschlags-Generator
+
+Person(painter, "Maler/Painter")
+Person(customer, "Customer")
+
+System_Boundary(kostensystem, "KI-Kostenvoranschlag System") {
+    Container(webapp, "React Web Application", "React 18, TypeScript, TailwindCSS", "Responsive web interface for creating and managing cost estimates")
+    Container(api, "Flask REST API", "Python, Flask, SQLAlchemy", "Handles business logic, AI integration, and data management")
+    ContainerDb(database, "Database", "SQLite/PostgreSQL", "Stores users, quotes, documents, and payment information")
+    Container(filestore, "File Storage", "Local File System", "Stores uploaded documents, generated PDFs, and processed images")
+}
+
+System_Ext(openai, "OpenAI GPT-4")
+System_Ext(tesseract, "Tesseract OCR")
+System_Ext(craftmypdf, "CraftMyPDF")
+System_Ext(stripe, "Stripe")
+System_Ext(smtp, "Email Service")
+
+Rel(painter, webapp, "Uses web interface to create quotes", "HTTPS")
+Rel(customer, webapp, "Views public demo", "HTTPS")
+
+Rel(webapp, api, "Makes API calls for all business operations", "JSON/HTTPS")
+Rel(api, database, "Reads from and writes to", "SQL/ORM")
+Rel(api, filestore, "Stores and retrieves files", "File I/O")
+
+Rel(api, openai, "Sends natural language for processing", "API/HTTPS")
+Rel(api, tesseract, "Processes documents for text extraction", "Local Process")
+Rel(api, craftmypdf, "Requests PDF generation", "API/HTTPS")
+Rel(api, stripe, "Handles payment processing", "API/HTTPS")
+Rel(api, smtp, "Sends emails with attachments", "SMTP/TLS")
+
+@enduml
+
+@startuml "KI-Kostenvoranschlag System - C4 Component Diagram - Backend API"
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Component Diagram - Flask Backend API
+
+Container(webapp, "React Web Application", "Frontend")
+
+Container_Boundary(api, "Flask REST API") {
+    Component(auth_controller, "Authentication Controller", "Flask Blueprint", "Handles user registration, login, and JWT token management")
+    Component(quote_controller, "Quote Controller", "Flask Blueprint", "Manages quote creation, retrieval, and status updates")
+    Component(ai_controller, "AI Controller", "Flask Blueprint", "Processes AI requests and document analysis")
+    Component(payment_controller, "Payment Controller", "Flask Blueprint", "Handles Stripe integration and quota management")
+    Component(user_controller, "User Controller", "Flask Blueprint", "Manages user profiles and settings")
+    
+    Component(ai_service, "AI Service", "Python Service", "Orchestrates OpenAI integration and intelligent question generation")
+    Component(document_service, "Document Service", "Python Service", "Handles file uploads, OCR processing, and document analysis")
+    Component(pdf_service, "PDF Service", "Python Service", "Manages PDF generation with fallback mechanisms")
+    Component(quota_service, "Quota Service", "Python Service", "Manages user quotas, subscriptions, and billing")
+    Component(stripe_service, "Stripe Service", "Python Service", "Handles payment processing and webhook verification")
+    
+    Component(auth_middleware, "Authentication Middleware", "Flask Middleware", "JWT token validation and user context")
+    Component(cors_middleware, "CORS Middleware", "Flask-CORS", "Cross-origin request handling")
+    
+    Component(user_model, "User Model", "SQLAlchemy Model", "User data and subscription information")
+    Component(quote_model, "Quote Model", "SQLAlchemy Model", "Quote and quote item data structures")
+    Component(document_model, "Document Model", "SQLAlchemy Model", "Uploaded document metadata")
+    Component(payment_model, "Payment Model", "SQLAlchemy Model", "Payment and transaction records")
+}
+
+ContainerDb(database, "Database", "SQLite/PostgreSQL")
+System_Ext(openai, "OpenAI GPT-4")
+System_Ext(tesseract, "Tesseract OCR")
+System_Ext(craftmypdf, "CraftMyPDF")
+System_Ext(stripe, "Stripe")
+System_Ext(smtp, "Email Service")
+
+' Frontend to Controllers
+Rel(webapp, auth_controller, "POST /api/auth/login, /register", "JSON/HTTPS")
+Rel(webapp, quote_controller, "GET,POST /api/quotes/*", "JSON/HTTPS")
+Rel(webapp, ai_controller, "POST /api/ai/*", "JSON/HTTPS")
+Rel(webapp, payment_controller, "POST /api/payments/*", "JSON/HTTPS")
+Rel(webapp, user_controller, "GET,PUT /api/users/*", "JSON/HTTPS")
+
+' Controllers to Services
+Rel(auth_controller, quota_service, "Check user limits")
+Rel(quote_controller, ai_service, "Generate intelligent quotes")
+Rel(quote_controller, pdf_service, "Create PDF documents")
+Rel(ai_controller, ai_service, "Process natural language")
+Rel(ai_controller, document_service, "Analyze uploaded documents")
+Rel(payment_controller, stripe_service, "Process payments")
+Rel(payment_controller, quota_service, "Update user quotas")
+
+' Services to External Systems
+Rel(ai_service, openai, "Natural language processing", "API/HTTPS")
+Rel(document_service, tesseract, "OCR text extraction", "Process")
+Rel(pdf_service, craftmypdf, "PDF generation", "API/HTTPS")
+Rel(pdf_service, smtp, "Email delivery", "SMTP/TLS")
+Rel(stripe_service, stripe, "Payment processing", "API/HTTPS")
+
+' Services to Models
+Rel(ai_service, quote_model, "Create/update quotes")
+Rel(document_service, document_model, "Store document metadata")
+Rel(quota_service, user_model, "Update user quotas")
+Rel(stripe_service, payment_model, "Record transactions")
+
+' Models to Database
+Rel(user_model, database, "User data persistence")
+Rel(quote_model, database, "Quote data persistence")
+Rel(document_model, database, "Document metadata")
+Rel(payment_model, database, "Payment records")
+
+' Middleware
+Rel(webapp, cors_middleware, "All requests")
+Rel(webapp, auth_middleware, "Protected endpoints")
+
+@enduml
+
+@startuml "KI-Kostenvoranschlag System - C4 Component Diagram - Frontend"
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Component Diagram - React Frontend Application
+
+Person(painter, "Maler/Painter")
+
+Container_Boundary(webapp, "React Web Application") {
+    Component(app, "App Component", "React Component", "Main application component with routing and global state")
+    Component(auth_components, "Authentication Components", "React Components", "Login, Register, and PrivateRoute components")
+    Component(dashboard, "Dashboard Component", "React Component", "Main user dashboard with quote overview and navigation")
+    Component(quote_creator, "Quote Creator Component", "React Component", "Multi-step quote creation with AI assistance")
+    Component(quote_detail, "Quote Detail Component", "React Component", "Quote editing, PDF generation, and email sending")
+    Component(chat_wizard, "Chat Quote Wizard", "React Component", "Conversational AI interface for quote creation")
+    
+    Component(ui_components, "UI Component Library", "shadcn/ui Components", "Reusable UI components (buttons, forms, dialogs, etc.)")
+    Component(auth_hook, "useAuth Hook", "React Hook", "Authentication state management and user context")
+    Component(mobile_hook, "useMobile Hook", "React Hook", "Responsive design utilities")
+    
+    Component(api_client, "API Client", "JavaScript Service", "Centralized HTTP client for backend communication")
+    
+    Component(router, "React Router", "react-router-dom", "Client-side routing and navigation")
+    Component(styling, "Styling System", "TailwindCSS", "Utility-first CSS framework for responsive design")
+}
+
+Container(api, "Flask REST API", "Backend")
+
+' User Interactions
+Rel(painter, auth_components, "Login/Register")
+Rel(painter, dashboard, "View quotes overview")
+Rel(painter, quote_creator, "Create new quotes")
+Rel(painter, quote_detail, "Edit and manage quotes")
+Rel(painter, chat_wizard, "AI-assisted quote creation")
+
+' Component Relationships
+Rel(app, router, "Manages routing")
+Rel(app, auth_hook, "Global auth state")
+Rel(router, auth_components, "Auth routes")
+Rel(router, dashboard, "Dashboard route")
+Rel(router, quote_creator, "Quote creation route")
+Rel(router, quote_detail, "Quote detail route")
+
+Rel(auth_components, auth_hook, "Authentication logic")
+Rel(dashboard, api_client, "Fetch user quotes")
+Rel(quote_creator, api_client, "Create quotes")
+Rel(quote_creator, chat_wizard, "AI interaction mode")
+Rel(quote_detail, api_client, "Update quotes, generate PDFs")
+Rel(chat_wizard, api_client, "AI processing requests")
+
+' Shared Dependencies
+Rel(auth_components, ui_components, "UI elements")
+Rel(dashboard, ui_components, "UI elements")
+Rel(quote_creator, ui_components, "UI elements")
+Rel(quote_detail, ui_components, "UI elements")
+Rel(chat_wizard, ui_components, "UI elements")
+
+Rel(dashboard, mobile_hook, "Responsive behavior")
+Rel(quote_creator, mobile_hook, "Responsive behavior")
+Rel(quote_detail, mobile_hook, "Responsive behavior")
+
+Rel(ui_components, styling, "CSS classes")
+
+' Backend Communication
+Rel(api_client, api, "All API requests", "JSON/HTTPS")
+
+@enduml
+
+@startuml "KI-Kostenvoranschlag System - Deployment Diagram"
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Deployment Diagram - Production Environment
+
+Deployment_Node(user_device, "User Device", "Desktop/Mobile Browser") {
+    Container(browser, "Web Browser", "Chrome, Firefox, Safari", "Renders React application")
+}
+
+Deployment_Node(cdn, "CDN", "Content Delivery Network") {
+    Container(static_assets, "Static Assets", "React Build", "Compiled React application, CSS, and JavaScript")
+}
+
+Deployment_Node(web_server, "Web Server", "Nginx/Apache") {
+    Container(reverse_proxy, "Reverse Proxy", "Nginx", "Routes requests and serves static files")
+}
+
+Deployment_Node(app_server, "Application Server", "Docker Container/VM") {
+    Container(flask_app, "Flask Application", "Gunicorn/uWSGI", "Python Flask API with AI services")
+    Container(file_storage, "File System", "Local/NFS", "Document uploads and generated PDFs")
+}
+
+Deployment_Node(database_server, "Database Server", "PostgreSQL Server") {
+    ContainerDb(postgres, "PostgreSQL Database", "PostgreSQL 14+", "User data, quotes, and transactions")
+}
+
+Deployment_Node(external_services, "External Services", "Third-party APIs") {
+    System_Ext(openai_prod, "OpenAI API", "GPT-4 Production")
+    System_Ext(stripe_prod, "Stripe API", "Payment Processing")
+    System_Ext(craftmypdf_prod, "CraftMyPDF API", "PDF Generation")
+    System_Ext(email_provider, "Email Provider", "SMTP Service")
+}
+
+' User Flow
+Rel(browser, cdn, "Loads static assets", "HTTPS")
+Rel(browser, reverse_proxy, "API requests", "HTTPS")
+
+' Internal Architecture
+Rel(reverse_proxy, flask_app, "Proxies API requests", "HTTP")
+Rel(flask_app, postgres, "Database queries", "PostgreSQL Protocol")
+Rel(flask_app, file_storage, "File operations", "File I/O")
+
+' External Integrations
+Rel(flask_app, openai_prod, "AI processing", "HTTPS/API")
+Rel(flask_app, stripe_prod, "Payment processing", "HTTPS/API")
+Rel(flask_app, craftmypdf_prod, "PDF generation", "HTTPS/API")
+Rel(flask_app, email_provider, "Email delivery", "SMTP/TLS")
+
+@enduml

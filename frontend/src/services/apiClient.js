@@ -1,7 +1,8 @@
 // API Client for Maler Kostenvoranschlag
 
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL + '/api';
+const resolvedBase = (import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : '';
+const API_BASE_URL = (resolvedBase || '') + '/api';
 
 class ApiClient {
   constructor() {
@@ -181,8 +182,9 @@ class ApiClient {
 
   // Health check
   async healthCheck() {
-    const response = await fetch('http://localhost:8000/health');
-    return await response.json();
+    const base = resolvedBase || 'http://localhost:8001'
+    const response = await fetch(`${base}/health`)
+    return await response.json()
   }
 
   // AI Analysis
