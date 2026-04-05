@@ -83,7 +83,7 @@ async def analyze_project_input(
             "timestamp": datetime.now().isoformat()
         })
         
-        print(result)
+        logger.debug("AI analysis result: %s", result)
 
         return AIAnalysisResponse(
             analysis=result.get("analysis", {}),
@@ -245,10 +245,8 @@ async def generate_quote_with_ai(
     """Generate a detailed quote based on project data and user answers"""
     try:
         logger.info(f"Generating AI quote for user {current_user.id}")
-        print("STEP 1: Starte generate_quote_with_ai")
         # conversation_history in dicts umwandeln
         history = [msg.model_dump() if hasattr(msg, 'model_dump') else dict(msg) for msg in request.conversation_history] if request.conversation_history else None
-        print("STEP 2: Nach history umwandeln")
 
         # Dokumente laden und als base64 encodieren
         quote_id = request.project_data.get('quote_id') if request.project_data else None
@@ -272,7 +270,7 @@ async def generate_quote_with_ai(
                         })
                 except Exception as e:
                     logger.error(f"Error reading document file {doc.file_path}: {str(e)}")
-        print(f"STEP 2b: Dokumente als base64 geladen: {len(document_files)}")
+        logger.debug("Documents loaded as base64: %d", len(document_files))
 
         result = await ai_service.process_answers_and_generate_quote(
             project_data=request.project_data,
@@ -281,11 +279,8 @@ async def generate_quote_with_ai(
             document_files=document_files,
             **_resolve_cost_params(request, current_user)
         )
-        print("STEP 3: Nach KI-Quote-Generierung")
         # Create quote in database
         quote_number = generate_quote_number()
-        print("STEP 4: Nach generate_quote_number")
-        # Create quote
         quote = Quote(
             quote_number=quote_number,
             user_id=current_user.id,
@@ -300,10 +295,8 @@ async def generate_quote_with_ai(
             created_by_ai=True,
             conversation_history=json.dumps(history, default=default_json) if history is not None else None
         )
-        print("STEP 5: Nach Quote-Objekt-Erstellung")
         db.add(quote)
         await db.flush()
-        print("STEP 6: Nach db.flush()")
         # Add quote items
         total_amount = 0.0
         quote_items_dicts = []
@@ -335,12 +328,9 @@ async def generate_quote_with_ai(
                 "created_at": quote_item.created_at,
                 "updated_at": quote_item.updated_at
             })
-        print("STEP 7: Nach Hinzufügen der QuoteItems")
         # Update quote with total amount
         quote.total_amount = total_amount
-        print("STEP 8: Nach Setzen von total_amount")
         await db.commit()
-        print("STEP 9: Nach db.commit()")
         pdf_data = {
             "quote_number": quote.quote_number,
             "customer_name": quote.customer_name,
@@ -351,11 +341,9 @@ async def generate_quote_with_ai(
             "project_description": quote.project_description,
             "quote_items": quote_items_dicts
         }
-        print(f"STEP 10: pdf_data: {pdf_data}")
         # Jetzt PDF-Generierung im Threadpool
         pdf_service = PDFService()
         pdf_result = await asyncio.to_thread(pdf_service.generate_quote_pdf, pdf_data)
-        print("STEP 11: Nach PDF-Generierung")
         # Add final quote generation to conversation
         if request.conversation_history:
             request.conversation_history.append({
@@ -363,7 +351,6 @@ async def generate_quote_with_ai(
                 "content": "Kostenvoranschlag wurde erstellt und als PDF gespeichert",
                 "timestamp": datetime.now().isoformat()
             })
-        print("STEP 12: Nach Hinzufügen zur conversation_history")
         return AIQuoteGenerationResponse(
             quote=result.get("quote", {}),
             items=quote_items_dicts,  # Use the complete quote items with all fields
@@ -374,8 +361,7 @@ async def generate_quote_with_ai(
             success=True,
             pdf_url=pdf_result.get("pdf_url") if pdf_result.get("success") else None
         )
-        print("STEP 13: Nach Response")
-        
+
     except Exception as e:
         logger.error(f"Error generating AI quote: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -17,25 +17,14 @@ class CacheService:
     async def connect(self):
         """Initialize Redis connection"""
         try:
-            # For development, use simple connection
-            if settings.debug:
-                self.redis_client = redis.Redis(
-                    host='localhost',
-                    port=6379,
-                    decode_responses=True,
-                    socket_connect_timeout=5,
-                    socket_timeout=5
-                )
-            else:
-                # Production Redis with password
-                self.redis_client = redis.Redis(
-                    host='redis',
-                    port=6379,
-                    password=settings.redis_password if hasattr(settings, 'redis_password') else None,
-                    decode_responses=True,
-                    socket_connect_timeout=5,
-                    socket_timeout=5
-                )
+            self.redis_client = redis.Redis(
+                host=settings.redis_host,
+                port=settings.redis_port,
+                password=settings.redis_password or None,
+                decode_responses=True,
+                socket_connect_timeout=5,
+                socket_timeout=5
+            )
             
             # Test connection
             await self.redis_client.ping()

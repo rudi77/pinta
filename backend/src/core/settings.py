@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     max_file_size: int = 10485760  # 10MB
     upload_dir: str = "uploads"
     
+    # Redis
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_password: str = ""
+
     # Rate Limiting
     rate_limit_requests: int = 5
     rate_limit_window_minutes: int = 15

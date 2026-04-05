@@ -44,5 +44,8 @@ USER appuser
 
 EXPOSE 8000
 
+# Entrypoint runs migrations before starting the app
+ENTRYPOINT ["/app/entrypoint.sh"]
+
 # Production command with Gunicorn
 CMD ["gunicorn", "src.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
