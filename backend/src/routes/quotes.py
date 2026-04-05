@@ -71,6 +71,7 @@ def quote_to_response(quote):
         "total_amount": quote.total_amount,
         "status": quote.status,
         "created_by_ai": quote.created_by_ai,
+        "is_paid": quote.is_paid,
         "conversation_history": json.loads(quote.conversation_history) if quote.conversation_history else [],
         "items": [
             {
@@ -532,8 +533,8 @@ async def download_quote_pdf(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Download generated PDF"""
-    
+    """Download generated PDF. Requires payment or premium subscription."""
+
     # Verify quote ownership
     result = await db.execute(
         select(Quote)
@@ -545,25 +546,32 @@ async def download_quote_pdf(
     if not quote:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Quote not found"
+            detail="Kostenvoranschlag nicht gefunden"
+        )
+
+    # Check payment status - premium users or paid quotes can download
+    if not current_user.is_premium and not quote.is_paid:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Bezahlung erforderlich. Bitte bezahlen Sie den Kostenvoranschlag, bevor Sie ihn herunterladen."
         )
 
     # Look for existing PDF file
     from pathlib import Path
     pdf_dir = Path('uploads/pdfs')
-    
+
     # Find the most recent PDF for this quote
     pdf_files = list(pdf_dir.glob(f"{quote.quote_number}_*.pdf"))
-    
+
     if not pdf_files:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="PDF not found. Please generate PDF first."
+            detail="PDF nicht gefunden. Bitte generieren Sie zuerst das PDF."
         )
-    
+
     # Get the most recent PDF
     latest_pdf = max(pdf_files, key=lambda p: p.stat().st_mtime)
-    
+
     return FileResponse(
         path=latest_pdf,
         filename=f"{quote.quote_number}.pdf",

@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     stripe_publishable_key: str = ""
     stripe_price_id: str = ""
     stripe_webhook_secret: str = ""
+    stripe_quote_download_price: float = 4.99  # Price in EUR for single quote download
     
     # Email
     smtp_host: str = ""

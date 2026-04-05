@@ -91,6 +91,9 @@ class Quote(Base):
     # Quota tracking
     quota_consumed = Column(Boolean, default=True)
     generation_method = Column(String(50), default='manual')  # manual, ai, api
+
+    # Payment tracking
+    is_paid = Column(Boolean, default=False)  # Whether download has been paid for
     
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
