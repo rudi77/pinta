@@ -586,7 +586,7 @@ async def export_quote(
     db: AsyncSession = Depends(get_db)
 ):
     """Export quote in various formats (PDF, JSON, CSV)"""
-    
+
     # Get quote with items
     result = await db.execute(
         select(Quote)
@@ -601,6 +601,14 @@ async def export_quote(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Quote not found"
         )
+
+    # PDF export requires payment (same rules as PDF download)
+    if export_options.format_type == "pdf":
+        if not current_user.is_premium and not quote.is_paid:
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail="Bezahlung erforderlich. Bitte bezahlen Sie den Kostenvoranschlag, bevor Sie ihn als PDF exportieren."
+            )
 
     try:
         # Convert quote to dict format

@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from typing import Dict
 import stripe
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 from src.core.database import get_db
 from src.core.settings import get_settings
@@ -184,6 +186,29 @@ async def create_quote_download_checkout(
             "message": "Kostenvoranschlag bereits bezahlt"
         }
 
+    # Check for existing pending checkout session to avoid duplicates
+    existing_payment = await db.execute(
+        select(Payment)
+        .where(Payment.quote_id == quote_id)
+        .where(Payment.user_id == current_user.id)
+        .where(Payment.payment_type == "quote_download")
+        .where(Payment.status == "pending")
+    )
+    existing = existing_payment.scalar_one_or_none()
+    if existing and existing.stripe_session_id:
+        try:
+            session = stripe.checkout.Session.retrieve(existing.stripe_session_id)
+            if session.status == "open":
+                return {
+                    "success": True,
+                    "checkout_url": session.url,
+                    "session_id": session.id,
+                    "amount": existing.amount,
+                    "currency": existing.currency
+                }
+        except stripe.error.InvalidRequestError:
+            pass  # Session expired or invalid, create a new one
+
     # Create Stripe checkout session for quote download
     download_price = settings.stripe_quote_download_price
 
@@ -300,35 +325,51 @@ async def stripe_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db)
 ):
-    """Handle Stripe webhook events"""
+    """Handle Stripe webhook events.
+
+    Requires STRIPE_WEBHOOK_SECRET to be configured and a valid
+    stripe-signature header on every request.
+    """
 
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
 
-    # Verify webhook signature if secret is configured
     webhook_secret = settings.stripe_webhook_secret
-    if webhook_secret and sig_header:
-        try:
-            event = stripe.Webhook.construct_event(
-                payload, sig_header, webhook_secret
-            )
-        except stripe.error.SignatureVerificationError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid webhook signature"
-            )
-    else:
-        import json
-        event = json.loads(payload)
 
-    event_type = event.get('type') if isinstance(event, dict) else event['type']
-    data = (event.get('data', {}).get('object', {}) if isinstance(event, dict)
-            else event['data']['object'])
+    if not webhook_secret:
+        logger.error("STRIPE_WEBHOOK_SECRET is not configured – rejecting webhook")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Webhook secret not configured"
+        )
+
+    if not sig_header:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing stripe-signature header"
+        )
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, webhook_secret
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid payload"
+        )
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid webhook signature"
+        )
+
+    event_type = event['type']
+    data = event['data']['object']
 
     if event_type == 'checkout.session.completed':
-        session_id = data.get('id') if isinstance(data, dict) else data['id']
-        metadata = (data.get('metadata', {}) if isinstance(data, dict)
-                    else data.get('metadata', {}))
+        session_id = data['id']
+        metadata = data.get('metadata', {})
         user_id = metadata.get('user_id')
         payment_type = metadata.get('payment_type')
 
