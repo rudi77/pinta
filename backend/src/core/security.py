@@ -4,10 +4,29 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 import uuid
 import logging
+import redis as sync_redis
 from src.core.settings import settings
 from src.core.cache import cache_service
 
 logger = logging.getLogger(__name__)
+
+# Lazy-initialized sync Redis client (reused across calls to avoid connection leaks)
+_sync_redis_client: Optional[sync_redis.Redis] = None
+
+
+def _get_sync_redis() -> sync_redis.Redis:
+    """Get or create a reusable sync Redis client."""
+    global _sync_redis_client
+    if _sync_redis_client is None:
+        _sync_redis_client = sync_redis.Redis(
+            host=settings.redis_host,
+            port=settings.redis_port,
+            password=settings.redis_password or None,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
+    return _sync_redis_client
 
 # Security configuration
 ALGORITHM = "HS256"
@@ -127,15 +146,7 @@ def is_token_blacklisted(jti: str) -> bool:
             return False
         
         key = f"blacklist:{jti}"
-        # Use sync redis client for this check
-        import redis
-        sync_client = redis.Redis(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            password=settings.redis_password or None,
-            decode_responses=True
-        )
-        return sync_client.exists(key) > 0
+        return _get_sync_redis().exists(key) > 0
     except Exception as e:
         logger.warning(f"Error checking blacklist: {e}")
         return False  # Fail open for availability
@@ -187,15 +198,7 @@ def is_user_tokens_revoked(user_id: int, issued_at: float) -> bool:
             return False
         
         key = f"user_revoked:{user_id}"
-        import redis
-        sync_client = redis.Redis(
-            host=settings.redis_host,
-            port=settings.redis_port,
-            password=settings.redis_password or None,
-            decode_responses=True
-        )
-        
-        revoke_time = sync_client.get(key)
+        revoke_time = _get_sync_redis().get(key)
         if revoke_time:
             revoke_timestamp = float(revoke_time)
             return issued_at < revoke_timestamp
