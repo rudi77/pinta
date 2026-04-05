@@ -37,8 +37,8 @@ class User(Base):
     quota_notification_threshold = Column(Integer, default=80)
     
     # Cost parameters for quote generation
-    hourly_rate = Column(Float, nullable=True)  # EUR/h netto, e.g. 45.00
-    material_cost_markup = Column(Float, nullable=True)  # Markup percentage on materials, e.g. 15.0 for 15%
+    hourly_rate = Column(Float, nullable=True)
+    material_cost_markup = Column(Float, nullable=True)
 
     # Stripe integration
     stripe_customer_id = Column(String(255))

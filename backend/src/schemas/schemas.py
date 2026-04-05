@@ -1,7 +1,11 @@
-from typing import Optional, List, Dict, Any
+from typing import Annotated, Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from enum import Enum
+
+# Reusable cost parameter types
+HourlyRate = Annotated[Optional[float], Field(None, ge=0, le=500, description="Stundensatz EUR/h netto")]
+MaterialCostMarkup = Annotated[Optional[float], Field(None, ge=0, le=100, description="Materialaufschlag in Prozent")]
 
 # Base Models
 class UserBase(BaseModel):
@@ -200,8 +204,8 @@ class AIQuoteGenerationRequest(BaseModel):
     customer_address: str
     customer_email: str
     customer_phone: str
-    hourly_rate: Optional[float] = Field(None, ge=0, le=500, description="Stundensatz EUR/h netto (überschreibt Profil-Einstellung)")
-    material_cost_markup: Optional[float] = Field(None, ge=0, le=100, description="Materialaufschlag % (überschreibt Profil-Einstellung)")
+    hourly_rate: HourlyRate = None
+    material_cost_markup: MaterialCostMarkup = None
 
 class AIQuoteGenerationResponse(BaseModel):
     quote: Dict[str, Any]
@@ -216,8 +220,8 @@ class QuickQuoteRequest(BaseModel):
     service_description: str = Field(..., min_length=5, description="Beschreibung der gewünschten Leistung")
     area: Optional[str] = None
     additional_info: Optional[str] = None
-    hourly_rate: Optional[float] = Field(None, ge=0, le=500, description="Stundensatz EUR/h netto (überschreibt Profil-Einstellung)")
-    material_cost_markup: Optional[float] = Field(None, ge=0, le=100, description="Materialaufschlag % (überschreibt Profil-Einstellung)")
+    hourly_rate: HourlyRate = None
+    material_cost_markup: MaterialCostMarkup = None
 
 class QuickQuoteItemResponse(BaseModel):
     position: int
@@ -261,8 +265,8 @@ class UserUpdate(BaseModel):
     company_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
-    hourly_rate: Optional[float] = Field(None, ge=0, le=500, description="Stundensatz in EUR/h netto")
-    material_cost_markup: Optional[float] = Field(None, ge=0, le=100, description="Materialaufschlag in Prozent")
+    hourly_rate: HourlyRate = None
+    material_cost_markup: MaterialCostMarkup = None
 
 class QuoteUpdate(QuoteBase):
     items: Optional[List[QuoteItemBase]] = None

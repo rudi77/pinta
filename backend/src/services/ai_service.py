@@ -115,13 +115,10 @@ class AIService:
             return self._get_mock_quote_response(project_data, answers)
 
         try:
-            # Build cost parameter instructions
-            cost_instructions = self._build_cost_instructions(hourly_rate, material_cost_markup)
-
             system_prompt = f"""Du bist ein erfahrener Maler-Meister und erstellst präzise Kostenvoranschläge.
             Basierend auf der Projektbeschreibung, den Antworten des Kunden und den angehängten Dokumenten (Pläne, Fotos), erstelle einen detaillierten Kostenvoranschlag mit realistischen Preisen für den deutschen Markt.
 
-            {cost_instructions}
+            {self._build_cost_instructions(hourly_rate, material_cost_markup)}
 
             Berücksichtige außerdem:
             - Schwierigkeitsgrad und Zugänglichkeit
@@ -212,13 +209,10 @@ class AIService:
             return self._get_mock_quick_quote_response(service_description)
 
         try:
-            # Build cost parameter instructions
-            cost_instructions = self._build_cost_instructions(hourly_rate, material_cost_markup)
-
             system_prompt = f"""Du bist ein erfahrener Malermeister in Deutschland.
 Erstelle einen professionellen Kostenvoranschlag basierend auf der Beschreibung des Kunden.
 
-{cost_instructions}
+{self._build_cost_instructions(hourly_rate, material_cost_markup)}
 
 Das Angebot soll:
 - Realistische Positionen mit Einheiten und Preisen enthalten
@@ -661,19 +655,13 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format (kein Markdown, keine Erkläru
     def _build_cost_instructions(self, hourly_rate: Optional[float] = None,
                                    material_cost_markup: Optional[float] = None) -> str:
         """Build cost parameter instructions for AI prompts based on user settings."""
-        parts = []
-
-        if hourly_rate is not None:
-            parts.append(f"- Verwende einen Stundensatz von {hourly_rate:.2f} EUR/h netto für alle Arbeitszeit-Positionen.")
-        else:
-            parts.append("- Arbeitszeit realistisch kalkulieren (Stundensatz 45-55 EUR/h netto)")
-
-        if material_cost_markup is not None:
-            parts.append(f"- Auf die Netto-Materialkosten einen Aufschlag von {material_cost_markup:.1f}% berechnen.")
-        else:
-            parts.append("- Materialkosten (Farbe, Grundierung, Werkzeug) zu marktüblichen Preisen kalkulieren")
-
-        return "KOSTENPARAMETER:\n" + "\n".join(parts)
+        rate = (f"- Verwende einen Stundensatz von {hourly_rate:.2f} EUR/h netto für alle Arbeitszeit-Positionen."
+                if hourly_rate is not None
+                else "- Arbeitszeit realistisch kalkulieren (Stundensatz 45-55 EUR/h netto)")
+        markup = (f"- Auf die Netto-Materialkosten einen Aufschlag von {material_cost_markup:.1f}% berechnen."
+                  if material_cost_markup is not None
+                  else "- Materialkosten (Farbe, Grundierung, Werkzeug) zu marktüblichen Preisen kalkulieren")
+        return f"KOSTENPARAMETER:\n{rate}\n{markup}"
 
     def _get_mock_analysis_response(self, description: str) -> Dict:
         """Mock response for testing without OpenAI API"""
