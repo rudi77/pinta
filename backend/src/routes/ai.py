@@ -37,6 +37,14 @@ logger = logging.getLogger(__name__)
 # Initialize AI service
 ai_service = AIService()
 
+
+def _resolve_cost_params(request, current_user) -> dict:
+    """Resolve cost parameters with priority: request > user profile > AI defaults (None)."""
+    return {
+        "hourly_rate": request.hourly_rate if request.hourly_rate is not None else current_user.hourly_rate,
+        "material_cost_markup": request.material_cost_markup if request.material_cost_markup is not None else current_user.material_cost_markup,
+    }
+
 def default_json(obj):
     if isinstance(obj, datetime):
         return obj.isoformat()
@@ -115,11 +123,11 @@ async def create_quick_quote(
                 detail="Monatliches Kontingent erschöpft. Upgraden Sie auf Premium für unbegrenzte Angebote."
             )
 
-        # Generate quote via AI
         ai_result = await ai_service.generate_quick_quote(
             service_description=request.service_description,
             area=request.area,
-            additional_info=request.additional_info
+            additional_info=request.additional_info,
+            **_resolve_cost_params(request, current_user)
         )
 
         # Save quote to DB
@@ -270,7 +278,8 @@ async def generate_quote_with_ai(
             project_data=request.project_data,
             answers=request.answers,
             conversation_history=history,
-            document_files=document_files
+            document_files=document_files,
+            **_resolve_cost_params(request, current_user)
         )
         print("STEP 3: Nach KI-Quote-Generierung")
         # Create quote in database

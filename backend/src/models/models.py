@@ -36,6 +36,10 @@ class User(Base):
     quota_warnings_enabled = Column(Boolean, default=True)
     quota_notification_threshold = Column(Integer, default=80)
     
+    # Cost parameters for quote generation
+    hourly_rate = Column(Float, nullable=True)
+    material_cost_markup = Column(Float, nullable=True)
+
     # Stripe integration
     stripe_customer_id = Column(String(255))
     stripe_subscription_id = Column(String(255))
