@@ -37,6 +37,13 @@ logger = logging.getLogger(__name__)
 # Initialize AI service
 ai_service = AIService()
 
+
+def _resolve_cost_params(request, current_user) -> tuple:
+    """Resolve cost parameters with priority: request > user profile > AI defaults (None)."""
+    hourly_rate = request.hourly_rate if request.hourly_rate is not None else current_user.hourly_rate
+    material_cost_markup = request.material_cost_markup if request.material_cost_markup is not None else current_user.material_cost_markup
+    return hourly_rate, material_cost_markup
+
 def default_json(obj):
     if isinstance(obj, datetime):
         return obj.isoformat()
@@ -115,9 +122,7 @@ async def create_quick_quote(
                 detail="Monatliches Kontingent erschöpft. Upgraden Sie auf Premium für unbegrenzte Angebote."
             )
 
-        # Resolve cost parameters: request overrides > user profile > AI defaults
-        hourly_rate = request.hourly_rate if request.hourly_rate is not None else getattr(current_user, 'hourly_rate', None)
-        material_cost_markup = request.material_cost_markup if request.material_cost_markup is not None else getattr(current_user, 'material_cost_markup', None)
+        hourly_rate, material_cost_markup = _resolve_cost_params(request, current_user)
 
         # Generate quote via AI
         ai_result = await ai_service.generate_quick_quote(
@@ -272,9 +277,7 @@ async def generate_quote_with_ai(
                     logger.error(f"Error reading document file {doc.file_path}: {str(e)}")
         print(f"STEP 2b: Dokumente als base64 geladen: {len(document_files)}")
 
-        # Resolve cost parameters: request overrides > user profile > AI defaults
-        hourly_rate = request.hourly_rate if request.hourly_rate is not None else getattr(current_user, 'hourly_rate', None)
-        material_cost_markup = request.material_cost_markup if request.material_cost_markup is not None else getattr(current_user, 'material_cost_markup', None)
+        hourly_rate, material_cost_markup = _resolve_cost_params(request, current_user)
 
         result = await ai_service.process_answers_and_generate_quote(
             project_data=request.project_data,
