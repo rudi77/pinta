@@ -10,6 +10,7 @@ import Register from './components/Register';
 import ChatQuoteWizard from './components/ChatQuoteWizard';
 import QuoteDetail from './components/QuoteDetail';
 import QuickQuote from './components/QuickQuote';
+import PrivateRoute from './components/PrivateRoute';
 
 // Header Component
 const Header = () => {
@@ -81,7 +82,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/quick-quote" element={<QuickQuote />} />
+            <Route path="/quick-quote" element={<PrivateRoute><QuickQuote /></PrivateRoute>} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/new-quote" element={<QuoteCreator />} />
             <Route path="/chat-quote" element={<ChatQuoteWizard />} />

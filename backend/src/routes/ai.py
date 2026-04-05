@@ -106,6 +106,15 @@ async def create_quick_quote(
     try:
         logger.info(f"Quick quote request from user {current_user.id}: {request.service_description[:80]}")
 
+        # Check user quota
+        from src.routes.quotes import check_user_quota
+        has_quota = await check_user_quota(current_user, db)
+        if not has_quota:
+            raise HTTPException(
+                status_code=429,
+                detail="Monatliches Kontingent erschöpft. Upgraden Sie auf Premium für unbegrenzte Angebote."
+            )
+
         # Generate quote via AI
         ai_result = await ai_service.generate_quick_quote(
             service_description=request.service_description,
@@ -133,7 +142,6 @@ async def create_quick_quote(
         await db.flush()
 
         # Save quote items
-        db_items = []
         for item_data in ai_result.get("items", []):
             db_item = QuoteItem(
                 quote_id=quote.id,
@@ -146,7 +154,6 @@ async def create_quick_quote(
                 work_type=item_data.get("category", "labor")
             )
             db.add(db_item)
-            db_items.append(db_item)
 
         await db.commit()
         await db.refresh(quote)
