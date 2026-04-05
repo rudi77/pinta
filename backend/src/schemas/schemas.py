@@ -296,6 +296,7 @@ class QuoteResponse(QuoteBase):
     quote_number: str
     user_id: int
     items: List[QuoteItemResponse]
+    is_paid: bool = False
     created_at: datetime
     updated_at: datetime
     created_by_ai: bool
@@ -304,9 +305,16 @@ class QuoteResponse(QuoteBase):
     class Config:
         from_attributes = True
 
-class PaymentResponse(PaymentBase):
+class PaymentResponse(BaseModel):
     id: int
-    quote_id: int
+    user_id: int
+    quote_id: Optional[int] = None
+    amount: float
+    currency: str = "EUR"
+    status: str
+    payment_type: str
+    description: Optional[str] = None
+    stripe_session_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
