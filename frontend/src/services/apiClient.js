@@ -216,6 +216,31 @@ class ApiClient {
     return response.data;
   }
 
+  // Quick Quote (MVP)
+  async createQuickQuote(data) {
+    return await this.request('/ai/quick-quote', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async downloadQuotePdf(quoteId) {
+    const token = localStorage.getItem('access_token');
+    const base = (import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : '';
+    const prefix = base ? '/api/v1' : '/api';
+    const url = `${base}${prefix}/quotes/${quoteId}/pdf/generate`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({}),
+    });
+    if (!response.ok) throw new Error(`PDF generation failed: ${response.status}`);
+    return response;
+  }
+
   async uploadDocument(formData) {
     return await this.request('/ai/upload-document', {
       method: 'POST',

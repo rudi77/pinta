@@ -15,7 +15,7 @@ from src.services.pdf_service import PDFService
 from src.core.security import get_current_user
 from src.models.models import User, Quote, QuoteItem, Document as DocumentModel
 from src.schemas.schemas import (
-    AIAnalysisRequest, 
+    AIAnalysisRequest,
     AIAnalysisResponse,
     AIQuestionResponse,
     AIFollowUpRequest,
@@ -23,7 +23,10 @@ from src.schemas.schemas import (
     AIQuoteGenerationResponse,
     AIConversationHistory,
     DocumentResponse,
-    ErrorResponse
+    ErrorResponse,
+    QuickQuoteRequest,
+    QuickQuoteResponse,
+    QuickQuoteItemResponse
 )
 from src.core.database import get_db
 from .quotes import generate_quote_number
@@ -92,6 +95,95 @@ async def quote_suggestions(
     current_user: User = Depends(get_current_user)
 ):
     return {"suggested_materials": [], "labor_breakdown": {}, "alternative_options": []}
+
+@router.post("/quick-quote", response_model=QuickQuoteResponse)
+async def create_quick_quote(
+    request: QuickQuoteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate a complete quote from minimal input in a single step (MVP Quick Quote)."""
+    try:
+        logger.info(f"Quick quote request from user {current_user.id}: {request.service_description[:80]}")
+
+        # Check user quota
+        from src.routes.quotes import check_user_quota
+        has_quota = await check_user_quota(current_user, db)
+        if not has_quota:
+            raise HTTPException(
+                status_code=429,
+                detail="Monatliches Kontingent erschöpft. Upgraden Sie auf Premium für unbegrenzte Angebote."
+            )
+
+        # Generate quote via AI
+        ai_result = await ai_service.generate_quick_quote(
+            service_description=request.service_description,
+            area=request.area,
+            additional_info=request.additional_info
+        )
+
+        # Save quote to DB
+        quote = Quote(
+            quote_number=generate_quote_number(),
+            user_id=current_user.id,
+            customer_name=request.customer_name or "",
+            project_title=ai_result.get("project_title", "Malerarbeiten"),
+            project_description=request.service_description,
+            total_amount=ai_result.get("total_amount", 0),
+            labor_hours=0,
+            hourly_rate=0,
+            material_cost=0,
+            additional_costs=0,
+            status="draft",
+            created_by_ai=True,
+            generation_method="ai"
+        )
+        db.add(quote)
+        await db.flush()
+
+        # Save quote items
+        for item_data in ai_result.get("items", []):
+            db_item = QuoteItem(
+                quote_id=quote.id,
+                position=item_data.get("position", 0),
+                description=item_data.get("description", ""),
+                quantity=item_data.get("quantity", 0),
+                unit=item_data.get("unit", "Stk"),
+                unit_price=item_data.get("unit_price", 0),
+                total_price=item_data.get("total_price", 0),
+                work_type=item_data.get("category", "labor")
+            )
+            db.add(db_item)
+
+        await db.commit()
+        await db.refresh(quote)
+
+        return QuickQuoteResponse(
+            quote_id=quote.id,
+            quote_number=quote.quote_number,
+            project_title=ai_result.get("project_title", "Malerarbeiten"),
+            items=[
+                QuickQuoteItemResponse(
+                    position=item.get("position", i + 1),
+                    description=item.get("description", ""),
+                    quantity=item.get("quantity", 0),
+                    unit=item.get("unit", "Stk"),
+                    unit_price=item.get("unit_price", 0),
+                    total_price=item.get("total_price", 0),
+                    category=item.get("category", "labor")
+                )
+                for i, item in enumerate(ai_result.get("items", []))
+            ],
+            subtotal=ai_result.get("subtotal", 0),
+            vat_amount=ai_result.get("vat_amount", 0),
+            total_amount=ai_result.get("total_amount", 0),
+            notes=ai_result.get("notes", ""),
+            recommendations=ai_result.get("recommendations", [])
+        )
+
+    except Exception as e:
+        logger.error(f"Error creating quick quote: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Fehler bei der Angebotserstellung: {str(e)}")
 
 @router.post("/ask-question", response_model=AIQuestionResponse)
 async def ask_follow_up_question(

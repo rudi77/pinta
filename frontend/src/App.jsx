@@ -9,6 +9,8 @@ import Login from './components/Login';
 import Register from './components/Register';
 import ChatQuoteWizard from './components/ChatQuoteWizard';
 import QuoteDetail from './components/QuoteDetail';
+import QuickQuote from './components/QuickQuote';
+import PrivateRoute from './components/PrivateRoute';
 
 // Header Component
 const Header = () => {
@@ -47,11 +49,11 @@ const Header = () => {
                 >
                   Dashboard
                 </button>
-                <button 
-                  onClick={() => window.location.href = '/new-quote'}
-                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                <button
+                  onClick={() => window.location.href = '/quick-quote'}
+                  className="bg-blue-600 text-white px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
                 >
-                  Neues Angebot
+                  Schnell-Angebot
                 </button>
                 <span className="text-sm text-gray-600">
                   Hallo, {user?.username || user?.company_name || 'User'}
@@ -80,11 +82,12 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/quick-quote" element={<PrivateRoute><QuickQuote /></PrivateRoute>} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/new-quote" element={<QuoteCreator />} />
             <Route path="/chat-quote" element={<ChatQuoteWizard />} />
             <Route path="/quotes/:quoteId" element={<QuoteDetail />} />
-            <Route path="/" element={<Navigate to="/login" />} />
+            <Route path="/" element={<Navigate to="/quick-quote" />} />
           </Routes>
         </div>
       </AuthProvider>
