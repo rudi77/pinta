@@ -115,11 +115,17 @@ async def create_quick_quote(
                 detail="Monatliches Kontingent erschöpft. Upgraden Sie auf Premium für unbegrenzte Angebote."
             )
 
+        # Resolve cost parameters: request overrides > user profile > AI defaults
+        hourly_rate = request.hourly_rate if request.hourly_rate is not None else getattr(current_user, 'hourly_rate', None)
+        material_cost_markup = request.material_cost_markup if request.material_cost_markup is not None else getattr(current_user, 'material_cost_markup', None)
+
         # Generate quote via AI
         ai_result = await ai_service.generate_quick_quote(
             service_description=request.service_description,
             area=request.area,
-            additional_info=request.additional_info
+            additional_info=request.additional_info,
+            hourly_rate=hourly_rate,
+            material_cost_markup=material_cost_markup
         )
 
         # Save quote to DB
@@ -266,11 +272,17 @@ async def generate_quote_with_ai(
                     logger.error(f"Error reading document file {doc.file_path}: {str(e)}")
         print(f"STEP 2b: Dokumente als base64 geladen: {len(document_files)}")
 
+        # Resolve cost parameters: request overrides > user profile > AI defaults
+        hourly_rate = request.hourly_rate if request.hourly_rate is not None else getattr(current_user, 'hourly_rate', None)
+        material_cost_markup = request.material_cost_markup if request.material_cost_markup is not None else getattr(current_user, 'material_cost_markup', None)
+
         result = await ai_service.process_answers_and_generate_quote(
             project_data=request.project_data,
             answers=request.answers,
             conversation_history=history,
-            document_files=document_files
+            document_files=document_files,
+            hourly_rate=hourly_rate,
+            material_cost_markup=material_cost_markup
         )
         print("STEP 3: Nach KI-Quote-Generierung")
         # Create quote in database

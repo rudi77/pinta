@@ -102,23 +102,28 @@ class AIService:
             logger.error(f"OpenAI API error: {str(e)}")
             return self._get_mock_analysis_response(description)
 
-    async def process_answers_and_generate_quote(self, 
-                                                project_data: Dict, 
+    async def process_answers_and_generate_quote(self,
+                                                project_data: Dict,
                                                 answers: List[Dict],
                                                 conversation_history: Optional[List[Dict]] = None,
-                                                document_files: Optional[List[Dict]] = None) -> Dict:
+                                                document_files: Optional[List[Dict]] = None,
+                                                hourly_rate: Optional[float] = None,
+                                                material_cost_markup: Optional[float] = None) -> Dict:
         """Process user answers and generate a detailed quote, including multimodal document files as base64."""
-        
+
         if not self.enabled:
             return self._get_mock_quote_response(project_data, answers)
-        
+
         try:
-            system_prompt = """Du bist ein erfahrener Maler-Meister und erstellst präzise Kostenvoranschläge.
+            # Build cost parameter instructions
+            cost_instructions = self._build_cost_instructions(hourly_rate, material_cost_markup)
+
+            system_prompt = f"""Du bist ein erfahrener Maler-Meister und erstellst präzise Kostenvoranschläge.
             Basierend auf der Projektbeschreibung, den Antworten des Kunden und den angehängten Dokumenten (Pläne, Fotos), erstelle einen detaillierten Kostenvoranschlag mit realistischen Preisen für den deutschen Markt.
 
-            Berücksichtige:
-            - Materialkosten (Farbe, Grundierung, Werkzeug)
-            - Arbeitszeit (Vorbereitung, Streichen, Nacharbeiten)
+            {cost_instructions}
+
+            Berücksichtige außerdem:
             - Schwierigkeitsgrad und Zugänglichkeit
             - Regionale Preisunterschiede (Deutschland)
             - Mehrwertsteuer (19%)
@@ -197,20 +202,27 @@ class AIService:
             logger.error(f"OpenAI API error in quote generation: {str(e)}")
             return self._get_mock_quote_response(project_data, answers)
 
-    async def generate_quick_quote(self, service_description: str, area: Optional[str] = None, additional_info: Optional[str] = None) -> Dict:
+    async def generate_quick_quote(self, service_description: str, area: Optional[str] = None,
+                                   additional_info: Optional[str] = None,
+                                   hourly_rate: Optional[float] = None,
+                                   material_cost_markup: Optional[float] = None) -> Dict:
         """Generate a quote in a single GPT call from minimal input (MVP Quick Quote)."""
 
         if not self.enabled:
             return self._get_mock_quick_quote_response(service_description)
 
         try:
-            system_prompt = """Du bist ein erfahrener Malermeister in Deutschland.
+            # Build cost parameter instructions
+            cost_instructions = self._build_cost_instructions(hourly_rate, material_cost_markup)
+
+            system_prompt = f"""Du bist ein erfahrener Malermeister in Deutschland.
 Erstelle einen professionellen Kostenvoranschlag basierend auf der Beschreibung des Kunden.
+
+{cost_instructions}
 
 Das Angebot soll:
 - Realistische Positionen mit Einheiten und Preisen enthalten
 - Materialkosten (Farbe, Grundierung, Abdeckmaterial) separat auflisten
-- Arbeitszeit realistisch kalkulieren (Stundensatz 45-55 EUR/h netto)
 - Vorarbeiten (Abkleben, Abdecken, Grundierung) berücksichtigen
 - Netto-Zwischensumme und Mehrwertsteuer (19%) separat ausweisen
 - Typische Formulierungen eines deutschen Handwerksbetriebs nutzen
@@ -645,6 +657,23 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format (kein Markdown, keine Erkläru
         except Exception as e:
             logger.error(f"OpenAI API error in document analysis: {str(e)}")
             return self._get_mock_document_analysis()
+
+    def _build_cost_instructions(self, hourly_rate: Optional[float] = None,
+                                   material_cost_markup: Optional[float] = None) -> str:
+        """Build cost parameter instructions for AI prompts based on user settings."""
+        parts = []
+
+        if hourly_rate is not None:
+            parts.append(f"- Verwende einen Stundensatz von {hourly_rate:.2f} EUR/h netto für alle Arbeitszeit-Positionen.")
+        else:
+            parts.append("- Arbeitszeit realistisch kalkulieren (Stundensatz 45-55 EUR/h netto)")
+
+        if material_cost_markup is not None:
+            parts.append(f"- Auf die Netto-Materialkosten einen Aufschlag von {material_cost_markup:.1f}% berechnen.")
+        else:
+            parts.append("- Materialkosten (Farbe, Grundierung, Werkzeug) zu marktüblichen Preisen kalkulieren")
+
+        return "KOSTENPARAMETER:\n" + "\n".join(parts)
 
     def _get_mock_analysis_response(self, description: str) -> Dict:
         """Mock response for testing without OpenAI API"""

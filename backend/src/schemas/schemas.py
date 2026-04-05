@@ -200,6 +200,8 @@ class AIQuoteGenerationRequest(BaseModel):
     customer_address: str
     customer_email: str
     customer_phone: str
+    hourly_rate: Optional[float] = Field(None, ge=0, description="Stundensatz EUR/h netto (überschreibt Profil-Einstellung)")
+    material_cost_markup: Optional[float] = Field(None, ge=0, le=100, description="Materialaufschlag % (überschreibt Profil-Einstellung)")
 
 class AIQuoteGenerationResponse(BaseModel):
     quote: Dict[str, Any]
@@ -214,6 +216,8 @@ class QuickQuoteRequest(BaseModel):
     service_description: str = Field(..., min_length=5, description="Beschreibung der gewünschten Leistung")
     area: Optional[str] = None
     additional_info: Optional[str] = None
+    hourly_rate: Optional[float] = Field(None, ge=0, description="Stundensatz EUR/h netto (überschreibt Profil-Einstellung)")
+    material_cost_markup: Optional[float] = Field(None, ge=0, le=100, description="Materialaufschlag % (überschreibt Profil-Einstellung)")
 
 class QuickQuoteItemResponse(BaseModel):
     position: int
@@ -253,6 +257,12 @@ class PaymentCreate(PaymentBase):
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     password: Optional[str] = None
+    username: Optional[str] = None
+    company_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    hourly_rate: Optional[float] = Field(None, ge=0, description="Stundensatz in EUR/h netto")
+    material_cost_markup: Optional[float] = Field(None, ge=0, le=100, description="Materialaufschlag in Prozent")
 
 class QuoteUpdate(QuoteBase):
     items: Optional[List[QuoteItemBase]] = None
@@ -276,6 +286,8 @@ class UserResponse(BaseModel):
     premium_until: Optional[datetime] = None
     quotes_this_month: int = 0
     additional_quotes: int = 0
+    hourly_rate: Optional[float] = None
+    material_cost_markup: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
