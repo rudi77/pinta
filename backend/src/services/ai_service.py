@@ -197,6 +197,94 @@ class AIService:
             logger.error(f"OpenAI API error in quote generation: {str(e)}")
             return self._get_mock_quote_response(project_data, answers)
 
+    async def generate_quick_quote(self, service_description: str, area: Optional[str] = None, additional_info: Optional[str] = None) -> Dict:
+        """Generate a quote in a single GPT call from minimal input (MVP Quick Quote)."""
+
+        if not self.enabled:
+            return self._get_mock_quick_quote_response(service_description)
+
+        try:
+            system_prompt = """Du bist ein erfahrener Malermeister in Deutschland.
+Erstelle einen professionellen Kostenvoranschlag basierend auf der Beschreibung des Kunden.
+
+Das Angebot soll:
+- Realistische Positionen mit Einheiten und Preisen enthalten
+- Materialkosten (Farbe, Grundierung, Abdeckmaterial) separat auflisten
+- Arbeitszeit realistisch kalkulieren (Stundensatz 45-55 EUR/h netto)
+- Vorarbeiten (Abkleben, Abdecken, Grundierung) berücksichtigen
+- Netto-Zwischensumme und Mehrwertsteuer (19%) separat ausweisen
+- Typische Formulierungen eines deutschen Handwerksbetriebs nutzen
+- Bei fehlenden Flächenangaben realistische Schätzungen verwenden und im Hinweistext darauf hinweisen
+
+Antworte AUSSCHLIESSLICH im folgenden JSON-Format (kein Markdown, keine Erklärungen drumherum):
+{
+  "project_title": "Kurzer Projekttitel",
+  "items": [
+    {"position": 1, "description": "Beschreibung der Position", "quantity": 1.0, "unit": "m²", "unit_price": 10.00, "total_price": 10.00, "category": "labor|material|preparation"}
+  ],
+  "subtotal": 0.00,
+  "vat_amount": 0.00,
+  "total_amount": 0.00,
+  "notes": "Hinweise zum Angebot",
+  "recommendations": ["Empfehlung 1"]
+}"""
+
+            user_input = f"Leistung: {service_description}"
+            if area:
+                user_input += f"\nFläche/Umfang: {area}"
+            if additional_info:
+                user_input += f"\nZusatzinfo: {additional_info}"
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_input}
+            ]
+
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=2000
+            )
+
+            content = response.choices[0].message.content
+
+            # Strip markdown code fences if present
+            if content.strip().startswith("```"):
+                lines = content.strip().split("\n")
+                lines = [l for l in lines if not l.strip().startswith("```")]
+                content = "\n".join(lines)
+
+            result = json.loads(content)
+            return result
+
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse quick quote JSON: {content}")
+            return self._get_mock_quick_quote_response(service_description)
+        except Exception as e:
+            logger.error(f"OpenAI API error in quick quote: {str(e)}")
+            return self._get_mock_quick_quote_response(service_description)
+
+    def _get_mock_quick_quote_response(self, service_description: str) -> Dict:
+        """Mock response for quick quote when OpenAI is not available."""
+        return {
+            "project_title": f"Malerarbeiten - {service_description[:50]}",
+            "items": [
+                {"position": 1, "description": "Vorarbeiten: Abkleben und Abdecken", "quantity": 1.0, "unit": "pauschal", "unit_price": 120.00, "total_price": 120.00, "category": "preparation"},
+                {"position": 2, "description": "Grundierung der Wandflächen", "quantity": 40.0, "unit": "m²", "unit_price": 4.50, "total_price": 180.00, "category": "material"},
+                {"position": 3, "description": "Wandanstrich 2x Dispersionsfarbe weiß", "quantity": 40.0, "unit": "m²", "unit_price": 8.50, "total_price": 340.00, "category": "labor"},
+                {"position": 4, "description": "Material: Dispersionsfarbe, Grundierung, Kleinmaterial", "quantity": 1.0, "unit": "pauschal", "unit_price": 185.00, "total_price": 185.00, "category": "material"}
+            ],
+            "subtotal": 825.00,
+            "vat_amount": 156.75,
+            "total_amount": 981.75,
+            "notes": "Dies ist ein Muster-Kostenvoranschlag. Die tatsächlichen Preise können je nach Objektbesichtigung abweichen.",
+            "recommendations": [
+                "Eine Vor-Ort-Besichtigung wird empfohlen für ein verbindliches Angebot.",
+                "Hochwertige Markenfarben sorgen für bessere Deckkraft und längere Haltbarkeit."
+            ]
+        }
+
     async def ask_follow_up_question_stream(self, conversation_history: List[Dict], 
                                           user_message: str):
         """Handle follow-up questions with streaming response and intelligent questions"""

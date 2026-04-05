@@ -13,7 +13,7 @@ const Login = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard');
+      navigate('/quick-quote');
     }
   }, [isAuthenticated, navigate]);
 

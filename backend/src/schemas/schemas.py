@@ -208,6 +208,33 @@ class AIQuoteGenerationResponse(BaseModel):
     conversation_history: List[AIConversationMessage]
     pdf_url: Optional[str] = None
 
+# Quick Quote Models (MVP)
+class QuickQuoteRequest(BaseModel):
+    customer_name: Optional[str] = None
+    service_description: str = Field(..., min_length=5, description="Beschreibung der gewünschten Leistung")
+    area: Optional[str] = None
+    additional_info: Optional[str] = None
+
+class QuickQuoteItemResponse(BaseModel):
+    position: int
+    description: str
+    quantity: float
+    unit: str
+    unit_price: float
+    total_price: float
+    category: str
+
+class QuickQuoteResponse(BaseModel):
+    quote_id: int
+    quote_number: str
+    project_title: str
+    items: List[QuickQuoteItemResponse]
+    subtotal: float
+    vat_amount: float
+    total_amount: float
+    notes: str
+    recommendations: List[str]
+
 # Create Models
 class UserCreate(UserBase):
     password: str

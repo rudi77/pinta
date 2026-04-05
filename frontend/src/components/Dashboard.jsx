@@ -170,16 +170,16 @@ const Dashboard = ({ onNavigate }) => {
         <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Neues Angebot</h3>
-              <p className="text-gray-600 text-sm">Erstellen Sie ein neues Angebot mit unserem KI-Assistenten</p>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Schnell-Angebot</h3>
+              <p className="text-gray-600 text-sm">Angebot in unter 60 Sekunden erstellen</p>
             </div>
             <div className="text-green-500 text-3xl">+</div>
           </div>
           <button
-            onClick={() => onNavigate('new-quote')}
-            className="mt-4 w-full bg-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+            onClick={() => navigate('/quick-quote')}
+            className="mt-4 w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
           >
-            Neues Angebot
+            Schnell-Angebot erstellen
           </button>
         </div>
 
