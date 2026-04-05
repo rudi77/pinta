@@ -129,7 +129,12 @@ def is_token_blacklisted(jti: str) -> bool:
         key = f"blacklist:{jti}"
         # Use sync redis client for this check
         import redis
-        sync_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        sync_client = redis.Redis(
+            host=settings.redis_host,
+            port=settings.redis_port,
+            password=settings.redis_password or None,
+            decode_responses=True
+        )
         return sync_client.exists(key) > 0
     except Exception as e:
         logger.warning(f"Error checking blacklist: {e}")
@@ -183,7 +188,12 @@ def is_user_tokens_revoked(user_id: int, issued_at: float) -> bool:
         
         key = f"user_revoked:{user_id}"
         import redis
-        sync_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        sync_client = redis.Redis(
+            host=settings.redis_host,
+            port=settings.redis_port,
+            password=settings.redis_password or None,
+            decode_responses=True
+        )
         
         revoke_time = sync_client.get(key)
         if revoke_time:

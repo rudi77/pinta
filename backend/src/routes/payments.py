@@ -70,7 +70,7 @@ async def create_checkout_session(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create checkout session: {str(e)}"
+            detail="Fehler beim Erstellen der Checkout-Session"
         )
 
 
@@ -132,7 +132,7 @@ async def create_additional_quotes_session(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create checkout session: {str(e)}"
+            detail="Fehler beim Erstellen der Checkout-Session"
         )
 
 
