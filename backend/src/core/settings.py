@@ -24,6 +24,17 @@ class Settings(BaseSettings):
     
     # OpenAI
     openai_api_key: str = ""
+    # Model used for standard text tasks (analysis, questions, quote generation)
+    openai_model: str = "gpt-4o-mini"
+    # Separate Vision-capable model for multi-modal photo analysis (Premium feature)
+    openai_vision_model: str = "gpt-4o"
+    # Embedding model for RAG material search
+    openai_embedding_model: str = "text-embedding-3-small"
+    # Embedding dimension (must match the model; 1536 for text-embedding-3-small)
+    openai_embedding_dimension: int = 1536
+    # Feature flags
+    vision_estimate_enabled: bool = True
+    rag_materials_enabled: bool = True
     
     # CORS
     allowed_origins: Union[str, List[str]] = "http://localhost:5173,http://localhost:3000"

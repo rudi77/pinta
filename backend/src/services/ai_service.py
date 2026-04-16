@@ -14,14 +14,136 @@ class AIService:
         api_key = settings.openai_api_key
         if api_key and api_key != 'test_key_placeholder' and api_key.startswith('sk-'):
             self.client = openai.AsyncOpenAI(api_key=api_key)
-            self.model = "gpt-4o-mini"  # Updated to use latest fast model
+            self.model = settings.openai_model
+            self.vision_model = settings.openai_vision_model
+            self.embedding_model = settings.openai_embedding_model
             self.enabled = True
-            logger.info("OpenAI client initialized successfully")
+            logger.info(
+                "OpenAI client initialized (text=%s, vision=%s, embedding=%s)",
+                self.model, self.vision_model, self.embedding_model,
+            )
         else:
             self.client = None
             self.model = None
+            self.vision_model = None
+            self.embedding_model = None
             self.enabled = False
             logger.warning("OpenAI API key not configured, using mock responses")
+
+    async def visual_estimate(self, image_b64: str, mime_type: str,
+                              extra_context: Optional[str] = None) -> Dict:
+        """Phase 1: On-site photo analysis using the dedicated vision model.
+
+        Returns a structured estimate of the surface area, substrate condition,
+        visible prep work and risk factors — the raw material for a fast quote
+        from a single photo taken by the contractor on site.
+        """
+        if not self.enabled:
+            return self._get_mock_visual_estimate()
+
+        system_prompt = """Du bist ein erfahrener Malermeister in Deutschland mit 20 Jahren Berufserfahrung.
+Der Handwerker schickt dir ein Foto von einer Baustelle und du musst daraus
+alle relevanten Informationen für einen Kostenvoranschlag extrahieren.
+
+Analysiere das Foto SORGFÄLTIG und schätze:
+- Raumtyp (Wohnzimmer, Bad, Flur, Fassade außen, Treppenhaus, etc.)
+- Grobe Flächenschätzung in Quadratmetern (Wände, Decke separat wenn erkennbar)
+- Aktueller Zustand des Untergrunds (neu, gut, Risse, Schimmel, Tapete, alte Farbe, etc.)
+- Notwendige Vorarbeiten (Spachteln, Grundierung, Tapete entfernen, Schimmelsanierung)
+- Sichtbare Risiken oder Besonderheiten (hohe Decke, Stuck, empfindliche Böden, Möbel)
+- Empfohlene Materialqualität (Standard-Dispersion, Premium-Silikat, etc.)
+- Geschätzte Arbeitszeit in Stunden
+
+WICHTIG: Wenn die Flächenschätzung unsicher ist, gib einen Bereich an (z.B. 20-30m²).
+Antworte AUSSCHLIESSLICH im folgenden JSON-Schema (kein Markdown):
+{
+  "room_type": "string",
+  "estimated_area_sqm": {"wall": number, "ceiling": number, "total": number},
+  "area_confidence": "low|medium|high",
+  "substrate_condition": "string",
+  "required_prep_work": ["string"],
+  "risk_factors": ["string"],
+  "recommended_material_quality": "standard|premium|special",
+  "estimated_labor_hours": number,
+  "summary": "string (2-3 Sätze)"
+}"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (extra_context or "Bitte analysiere dieses Foto der Baustelle für einen Kostenvoranschlag."),
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime_type};base64,{image_b64}"},
+                    },
+                ],
+            },
+        ]
+
+        try:
+            response = await self.client.chat.completions.create(
+                model=self.vision_model,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=900,
+                response_format={"type": "json_object"},
+            )
+            content = response.choices[0].message.content
+            return json.loads(content)
+        except json.JSONDecodeError:
+            logger.error("Vision estimate returned invalid JSON: %s", content)
+            return self._get_mock_visual_estimate()
+        except Exception as e:
+            logger.error("Vision estimate error: %s", e)
+            return self._get_mock_visual_estimate()
+
+    def _get_mock_visual_estimate(self) -> Dict:
+        """Offline / no-API fallback for the visual estimate endpoint."""
+        return {
+            "room_type": "Wohnzimmer",
+            "estimated_area_sqm": {"wall": 42.0, "ceiling": 22.0, "total": 64.0},
+            "area_confidence": "medium",
+            "substrate_condition": "Bestehende Dispersionsfarbe, leichte Risse im oberen Wandbereich",
+            "required_prep_work": [
+                "Risse spachteln und schleifen",
+                "Grundierung auf Reparaturstellen",
+                "Abkleben von Fenstern und Steckdosen",
+            ],
+            "risk_factors": [
+                "Deckenhöhe über 2,70 m (Gerüst/Leiter)",
+                "Empfindlicher Parkettboden — sorgfältig abdecken",
+            ],
+            "recommended_material_quality": "standard",
+            "estimated_labor_hours": 14.0,
+            "summary": (
+                "Standard-Wohnraum mit solidem Untergrund. Vor dem Anstrich sind "
+                "kleinere Spachtelarbeiten an den Wänden nötig. Geschätzte "
+                "Gesamtfläche ca. 64m² inkl. Decke."
+            ),
+        }
+
+    async def create_embedding(self, text: str) -> List[float]:
+        """Create an OpenAI embedding for RAG material retrieval.
+
+        Returns a zero-vector of the configured dimension when the API is not
+        available, so downstream similarity search degrades gracefully.
+        """
+        if not self.enabled:
+            return [0.0] * settings.openai_embedding_dimension
+        try:
+            response = await self.client.embeddings.create(
+                model=self.embedding_model,
+                input=text,
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            logger.error("Embedding error for text %.60r: %s", text, e)
+            return [0.0] * settings.openai_embedding_dimension
 
     async def analyze_project_description(self, description: str, context: str = "initial_input", conversation_history: Optional[List[Dict]] = None) -> Dict:
         """Analyze project description and generate intelligent follow-up questions"""
@@ -108,8 +230,14 @@ class AIService:
                                                 conversation_history: Optional[List[Dict]] = None,
                                                 document_files: Optional[List[Dict]] = None,
                                                 hourly_rate: Optional[float] = None,
-                                                material_cost_markup: Optional[float] = None) -> Dict:
-        """Process user answers and generate a detailed quote, including multimodal document files as base64."""
+                                                material_cost_markup: Optional[float] = None,
+                                                material_context: Optional[List[Dict]] = None) -> Dict:
+        """Process user answers and generate a detailed quote, including multimodal document files as base64.
+
+        If ``material_context`` is provided (Phase 2 RAG), the retrieved real-world
+        prices are injected into the system prompt so the LLM grounds its cost
+        estimates in actual data rather than guessing.
+        """
 
         if not self.enabled:
             return self._get_mock_quote_response(project_data, answers)
@@ -119,6 +247,8 @@ class AIService:
             Basierend auf der Projektbeschreibung, den Antworten des Kunden und den angehängten Dokumenten (Pläne, Fotos), erstelle einen detaillierten Kostenvoranschlag mit realistischen Preisen für den deutschen Markt.
 
             {self._build_cost_instructions(hourly_rate, material_cost_markup)}
+
+            {self._build_material_context_block(material_context)}
 
             Berücksichtige außerdem:
             - Schwierigkeitsgrad und Zugänglichkeit
@@ -651,6 +781,28 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format (kein Markdown, keine Erkläru
         except Exception as e:
             logger.error(f"OpenAI API error in document analysis: {str(e)}")
             return self._get_mock_document_analysis()
+
+    def _build_material_context_block(self, material_context: Optional[List[Dict]] = None) -> str:
+        """Format retrieved material prices as a grounded-context block for the LLM.
+
+        Returns an empty string when no context is supplied so the prompt stays
+        compact for free-tier / RAG-disabled requests.
+        """
+        if not material_context:
+            return ""
+        lines = ["REALE MATERIALPREISE (aus Produktdatenbank — NUTZE DIESE als Grundlage):"]
+        for m in material_context[:10]:
+            name = m.get("name", "")
+            manufacturer = m.get("manufacturer") or "—"
+            unit = m.get("unit") or "Stk"
+            price = m.get("price_net")
+            region = m.get("region") or "DE"
+            lines.append(
+                f"- {name} ({manufacturer}): {price:.2f} EUR/{unit} netto, Region {region}"
+                if price is not None
+                else f"- {name} ({manufacturer}): Preis n/a, Einheit {unit}, Region {region}"
+            )
+        return "\n".join(lines)
 
     def _build_cost_instructions(self, hourly_rate: Optional[float] = None,
                                    material_cost_markup: Optional[float] = None) -> str:

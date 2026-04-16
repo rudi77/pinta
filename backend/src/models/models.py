@@ -232,6 +232,33 @@ class UsageTracking(Base):
     # Relationships
     user = relationship("User", back_populates="usage_tracking")
 
+class MaterialPrice(Base):
+    """RAG knowledge-base entry: a painting material with a real-world price.
+
+    Embeddings are stored as JSON text so the table works on both SQLite and
+    PostgreSQL without pgvector. Similarity search is done in Python
+    (see ``services.rag_service``). Upgrade path: add a pgvector column in a
+    future migration and keep the JSON as fallback.
+    """
+    __tablename__ = "material_prices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False, index=True)
+    manufacturer = Column(String(120), nullable=True)
+    category = Column(String(80), nullable=True, index=True)  # paint, primer, tape, tool, ...
+    unit = Column(String(20), nullable=False)  # m², l, kg, Stk
+    price_net = Column(Float, nullable=False)
+    region = Column(String(20), nullable=True, index=True)  # e.g. 'DE', 'DE-1' for PLZ starting with 1
+    source = Column(String(120), nullable=True)  # origin of the data
+    description = Column(Text, nullable=True)
+
+    # JSON-serialized list[float] — embedding of "name + description + manufacturer"
+    embedding = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class QuotaNotification(Base):
     __tablename__ = "quota_notifications"
     
