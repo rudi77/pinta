@@ -11,6 +11,7 @@ import ChatQuoteWizard from './components/ChatQuoteWizard';
 import QuoteDetail from './components/QuoteDetail';
 import QuickQuote from './components/QuickQuote';
 import PrivateRoute from './components/PrivateRoute';
+import VerifyEmail from './components/VerifyEmail';
 
 // Header Component
 const Header = () => {
@@ -82,6 +83,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/quick-quote" element={<PrivateRoute><QuickQuote /></PrivateRoute>} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/new-quote" element={<QuoteCreator />} />
