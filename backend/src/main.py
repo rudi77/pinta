@@ -33,11 +33,38 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
+def _validate_production_config(cfg=settings) -> None:
+    """Fail fast on misconfiguration that would silently break paid flows.
+
+    In production mode, if Stripe is configured (secret key set) the webhook
+    secret and price id must also be present — otherwise webhooks return 500
+    and premium upgrade checkouts cannot be created, both of which would only
+    be discovered after a paying customer hits the failure in the wild.
+    Skipped in debug so local development without Stripe still boots.
+    """
+    if cfg.debug:
+        return
+    if cfg.stripe_secret_key:
+        missing = []
+        if not cfg.stripe_webhook_secret:
+            missing.append("STRIPE_WEBHOOK_SECRET")
+        if not cfg.stripe_price_id:
+            missing.append("STRIPE_PRICE_ID")
+        if missing:
+            raise RuntimeError(
+                "Stripe is configured (STRIPE_SECRET_KEY set) but the following "
+                "required settings are missing: " + ", ".join(missing) +
+                ". Set them in the environment or set DEBUG=true for local use."
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Maler Kostenvoranschlag API...")
-    
+
+    _validate_production_config()
+
     # Initialize database
     await init_db()
     logger.info("Database initialized")
