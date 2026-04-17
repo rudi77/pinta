@@ -1,19 +1,43 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from typing import Optional
+from datetime import datetime, timedelta, timezone
 import logging
+import secrets
 
 from src.core.database import get_db
 from src.core.security import (
-    verify_password, get_password_hash, create_token_pair, 
+    verify_password, get_password_hash, create_token_pair,
     blacklist_token, revoke_all_user_tokens,
     get_current_user, get_current_active_user, get_refresh_token_user,
     check_auth_rate_limit
 )
-from src.models.models import User
+from src.core.settings import settings
+from src.models.models import User, EmailVerificationToken
 from src.schemas.schemas import UserCreate, UserResponse, LoginRequest, Token, SuccessResponse
+from src.services.email_service import email_service
+
+VERIFICATION_TOKEN_TTL_HOURS = 24
+
+
+async def _issue_verification_token(user: User, db: AsyncSession) -> EmailVerificationToken:
+    """Create and persist a fresh verification token for `user`."""
+    token = EmailVerificationToken(
+        user_id=user.id,
+        token=secrets.token_urlsafe(48),
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=VERIFICATION_TOKEN_TTL_HOURS),
+    )
+    db.add(token)
+    await db.commit()
+    await db.refresh(token)
+    return token
+
+
+def _verification_url(token: str) -> str:
+    base = settings.app_base_url.rstrip("/")
+    return f"{base}/verify-email?token={token}"
 
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 security = HTTPBearer()
@@ -52,7 +76,9 @@ async def register(
             detail=detail
         )
     
-    # Create new user with enhanced security
+    # Create new user with enhanced security. In debug mode (local dev) we
+    # auto-verify so the rest of the app is usable without an SMTP server;
+    # production requires an emailed verification link.
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
         username=user_data.username,
@@ -61,20 +87,90 @@ async def register(
         company_name=user_data.company_name,
         phone=user_data.phone,
         address=user_data.address,
-        is_active=True  # Account active by default
+        is_active=True,
+        is_verified=settings.debug,
     )
-    
+
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
-    
+
     logger.info(f"User registered successfully: {db_user.email} (ID: {db_user.id})")
-    
+
+    if not db_user.is_verified:
+        token_row = await _issue_verification_token(db_user, db)
+        await email_service.send_verification_email(
+            db_user.email, _verification_url(token_row.token)
+        )
+
     return {
         "id": db_user.id,
         "email": db_user.email,
-        "username": db_user.username
+        "username": db_user.username,
+        "is_verified": db_user.is_verified,
     }
+
+
+@router.get("/verify-email")
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+    """Activate a user by confirming ownership of their email address."""
+    result = await db.execute(
+        select(EmailVerificationToken).where(EmailVerificationToken.token == token)
+    )
+    row = result.scalar_one_or_none()
+
+    if row is None:
+        raise HTTPException(status_code=400, detail="Invalid verification token")
+
+    if row.used_at is not None:
+        raise HTTPException(status_code=400, detail="Verification token already used")
+
+    expires_at = row.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Verification token expired")
+
+    now = datetime.now(timezone.utc)
+    await db.execute(
+        update(User).where(User.id == row.user_id).values(is_verified=True)
+    )
+    await db.execute(
+        update(EmailVerificationToken)
+        .where(EmailVerificationToken.id == row.id)
+        .values(used_at=now)
+    )
+    await db.commit()
+
+    logger.info(f"Email verified for user_id={row.user_id}")
+    return SuccessResponse(message="Email verified successfully")
+
+
+@router.post("/resend-verification", response_model=SuccessResponse)
+async def resend_verification(
+    payload: dict,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Resend verification email. Generic success to avoid user-enumeration."""
+    await check_auth_rate_limit(request, db)
+    email = (payload or {}).get("email", "").strip().lower()
+    generic = SuccessResponse(
+        message="If the account exists and is not verified, a new email has been sent."
+    )
+    if not email:
+        return generic
+
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user is None or user.is_verified:
+        return generic
+
+    token_row = await _issue_verification_token(user, db)
+    await email_service.send_verification_email(
+        user.email, _verification_url(token_row.token)
+    )
+    return generic
 
 @router.post("/login")
 async def login(
@@ -107,7 +203,14 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account deactivated"
         )
-    
+
+    if not user.is_verified:
+        logger.warning(f"Login attempt for unverified user: {login_data.email}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified. Please check your inbox for the verification link."
+        )
+
     # Create token pair with user data
     user_data = {
         "sub": user.email,

@@ -261,23 +261,34 @@ class MaterialPrice(Base):
 
 class QuotaNotification(Base):
     __tablename__ = "quota_notifications"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     # Notification details
     notification_type = Column(String(50), nullable=False)  # warning, limit_reached, reset
     resource_type = Column(String(50), nullable=False)  # quotes, documents, api_requests, storage
     threshold_percentage = Column(Float, nullable=False)
     message = Column(Text, nullable=False)
-    
+
     # Status
     is_read = Column(Boolean, default=False)
     sent_at = Column(DateTime)
-    
+
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
-    
+
     # Relationships
     user = relationship("User", back_populates="quota_notifications")
+
+
+class EmailVerificationToken(Base):
+    __tablename__ = "email_verification_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token = Column(String(128), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
 
