@@ -70,6 +70,7 @@ const Register = () => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Benutzername"
+                autoComplete="username"
                 className="mb-4"
               />
             </div>
@@ -80,6 +81,7 @@ const Register = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="E-Mail-Adresse"
+                autoComplete="email"
                 className="mb-4"
               />
             </div>
@@ -90,6 +92,7 @@ const Register = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Passwort"
+                autoComplete="new-password"
                 className="mb-4"
               />
             </div>
@@ -100,6 +103,7 @@ const Register = () => {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Passwort bestätigen"
+                autoComplete="new-password"
               />
             </div>
           </div>
