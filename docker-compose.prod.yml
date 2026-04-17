@@ -77,6 +77,14 @@ services:
       - RATE_LIMIT_REQUESTS=5
       - RATE_LIMIT_WINDOW_MINUTES=15
       - DEBUG=false
+      - APP_BASE_URL=${APP_BASE_URL}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Pinta}
+      - SMTP_USE_TLS=${SMTP_USE_TLS:-true}
     volumes:
       - uploads_prod:/app/uploads
     depends_on:

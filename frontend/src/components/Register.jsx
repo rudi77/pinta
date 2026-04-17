@@ -11,6 +11,7 @@ const Register = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [verificationPending, setVerificationPending] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,18 +22,36 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Register submit clicked", { email, username, password });
     if (password !== confirmPassword) {
       alert('Passwörter stimmen nicht überein');
       return;
     }
-    console.log("Register submit clicked 2", { email, username, password });
     try {
-      await register({ email, username, password });
+      const response = await register({ email, username, password });
+      if (response && response.is_verified === false) {
+        setVerificationPending(true);
+      }
     } catch (error) {
       // Error is already handled by useAuth
     }
   };
+
+  if (verificationPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <Card className="max-w-md w-full space-y-6 p-8 text-center">
+          <h2 className="text-2xl font-bold text-gray-900">Fast geschafft!</h2>
+          <p className="text-gray-600">
+            Wir haben dir einen Bestätigungslink an <strong>{email}</strong> geschickt.
+            Bitte öffne die E-Mail und klicke auf den Link, um dein Konto zu aktivieren.
+          </p>
+          <Button className="w-full" onClick={() => navigate('/login')}>
+            Zum Login
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

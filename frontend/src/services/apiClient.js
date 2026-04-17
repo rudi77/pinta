@@ -98,6 +98,17 @@ class ApiClient {
     return response;
   }
 
+  async verifyEmail(token) {
+    return await this.request(`/auth/verify-email?token=${encodeURIComponent(token)}`);
+  }
+
+  async resendVerification(email) {
+    return await this.request('/auth/resend-verification', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
   async logout() {
     try {
       await this.request('/auth/logout', { method: 'POST' });
