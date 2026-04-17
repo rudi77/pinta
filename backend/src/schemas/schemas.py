@@ -17,6 +17,9 @@ class UserBase(BaseModel):
 
 class QuoteBase(BaseModel):
     customer_name: str
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_address: Optional[str] = None
     project_title: str
     project_description: str
     total_amount: float
@@ -29,6 +32,11 @@ class QuoteItemBase(BaseModel):
     quantity: float
     unit_price: float
     total_price: float
+    position: Optional[int] = None
+    unit: Optional[str] = "Stk"
+    room_name: Optional[str] = None
+    area_sqm: Optional[float] = None
+    work_type: Optional[str] = None
 
 class PaymentBase(BaseModel):
     amount: float
