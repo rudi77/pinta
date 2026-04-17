@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
+    smtp_from: str = ""  # Falls leer, wird smtp_user verwendet
+    smtp_from_name: str = "Pinta"
+    smtp_use_tls: bool = True  # STARTTLS on non-465 ports
+
+    # Application base URL (used for verification links, etc.)
+    app_base_url: str = "http://localhost:5173"
     
     # File Upload
     max_file_size: int = 10485760  # 10MB
