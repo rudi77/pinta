@@ -11,6 +11,7 @@ from src.core.database import init_db
 from src.core.cache import cache_service
 from src.core.websocket_manager import keep_connections_alive
 from src.core.security_tasks import start_security_tasks, stop_security_tasks, get_security_status
+from src.core.quota_scheduler import start_quota_scheduler, stop_quota_scheduler
 from src.core.settings import settings
 from src.routes import auth, users, quotes, ai, payments, chat, documents, quota, materials
 
@@ -48,12 +49,14 @@ async def lifespan(app: FastAPI):
     # Start background tasks
     asyncio.create_task(keep_connections_alive())
     await start_security_tasks()
+    await start_quota_scheduler()
     logger.info("Background tasks started")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down...")
+    await stop_quota_scheduler()
     await stop_security_tasks()
     await cache_service.disconnect()
     logger.info("Services disconnected")
