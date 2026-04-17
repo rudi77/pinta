@@ -11,8 +11,9 @@ from src.core.database import init_db
 from src.core.cache import cache_service
 from src.core.websocket_manager import keep_connections_alive
 from src.core.security_tasks import start_security_tasks, stop_security_tasks, get_security_status
+from src.core.quota_scheduler import start_quota_scheduler, stop_quota_scheduler
 from src.core.settings import settings
-from src.routes import auth, users, quotes, ai, payments, chat, documents, quota
+from src.routes import auth, users, quotes, ai, payments, chat, documents, quota, materials
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -32,11 +33,38 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response
 
+def _validate_production_config(cfg=settings) -> None:
+    """Fail fast on misconfiguration that would silently break paid flows.
+
+    In production mode, if Stripe is configured (secret key set) the webhook
+    secret and price id must also be present — otherwise webhooks return 500
+    and premium upgrade checkouts cannot be created, both of which would only
+    be discovered after a paying customer hits the failure in the wild.
+    Skipped in debug so local development without Stripe still boots.
+    """
+    if cfg.debug:
+        return
+    if cfg.stripe_secret_key:
+        missing = []
+        if not cfg.stripe_webhook_secret:
+            missing.append("STRIPE_WEBHOOK_SECRET")
+        if not cfg.stripe_price_id:
+            missing.append("STRIPE_PRICE_ID")
+        if missing:
+            raise RuntimeError(
+                "Stripe is configured (STRIPE_SECRET_KEY set) but the following "
+                "required settings are missing: " + ", ".join(missing) +
+                ". Set them in the environment or set DEBUG=true for local use."
+            )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Maler Kostenvoranschlag API...")
-    
+
+    _validate_production_config()
+
     # Initialize database
     await init_db()
     logger.info("Database initialized")
@@ -48,12 +76,14 @@ async def lifespan(app: FastAPI):
     # Start background tasks
     asyncio.create_task(keep_connections_alive())
     await start_security_tasks()
+    await start_quota_scheduler()
     logger.info("Background tasks started")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down...")
+    await stop_quota_scheduler()
     await stop_security_tasks()
     await cache_service.disconnect()
     logger.info("Services disconnected")
@@ -107,6 +137,7 @@ app.include_router(payments.router, tags=["payments"])
 app.include_router(chat.router, tags=["chat"])
 app.include_router(documents.router, tags=["documents"])
 app.include_router(quota.router, tags=["quota"])
+app.include_router(materials.router, tags=["materials"])
 
 # Health check
 @app.get("/health")

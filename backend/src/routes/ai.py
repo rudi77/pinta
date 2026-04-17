@@ -11,6 +11,7 @@ import asyncio
 import base64
 
 from src.services.ai_service import AIService
+from src.services.rag_service import RagService
 from src.services.pdf_service import PDFService
 from src.core.security import get_current_user
 from src.models.models import User, Quote, QuoteItem, Document as DocumentModel
@@ -26,9 +27,11 @@ from src.schemas.schemas import (
     ErrorResponse,
     QuickQuoteRequest,
     QuickQuoteResponse,
-    QuickQuoteItemResponse
+    QuickQuoteItemResponse,
+    VisualEstimateResponse
 )
 from src.core.database import get_db
+from src.core.settings import settings
 from .quotes import generate_quote_number
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI"])
@@ -36,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize AI service
 ai_service = AIService()
+rag_service = RagService(ai_service=ai_service)
 
 
 def _resolve_cost_params(request, current_user) -> dict:
@@ -96,6 +100,54 @@ async def analyze_project_input(
     except Exception as e:
         logger.error(f"Error analyzing project input: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+ALLOWED_VISUAL_MIME_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic"}
+MAX_VISUAL_FILE_SIZE = 12 * 1024 * 1024  # 12 MB — Vision payloads degrade beyond this
+
+
+@router.post("/visual-estimate", response_model=VisualEstimateResponse)
+async def visual_estimate(
+    file: UploadFile = File(...),
+    extra_context: Optional[str] = Form(None),
+    current_user: User = Depends(get_current_user),
+):
+    """Phase 1: Analyze a single on-site photo and return a structured estimate.
+
+    This is a Premium-gated endpoint — the whole conversion hypothesis is that
+    a contractor standing on a building site can snap one photo and get an
+    instant, grounded estimate. That wow-effect is the Free→Premium trigger.
+    """
+    if not settings.vision_estimate_enabled:
+        raise HTTPException(status_code=503, detail="Visual estimate feature is disabled.")
+
+    if not current_user.is_premium:
+        raise HTTPException(
+            status_code=402,
+            detail="Visual-Estimate ist ein Premium-Feature. Bitte upgraden Sie Ihren Account.",
+        )
+
+    if file.content_type not in ALLOWED_VISUAL_MIME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Nicht unterstützter Bildtyp: {file.content_type}. Erlaubt: JPEG/PNG/WebP/HEIC.",
+        )
+
+    content = await file.read()
+    if len(content) > MAX_VISUAL_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="Bild ist zu groß (max. 12 MB).")
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Leere Datei erhalten.")
+
+    image_b64 = base64.b64encode(content).decode("utf-8")
+    logger.info("Visual estimate requested by user %s (%d bytes)", current_user.id, len(content))
+
+    result = await ai_service.visual_estimate(
+        image_b64=image_b64,
+        mime_type=file.content_type,
+        extra_context=extra_context,
+    )
+    return VisualEstimateResponse(**result)
+
 
 @router.post("/quote-suggestions")
 async def quote_suggestions(
@@ -272,11 +324,35 @@ async def generate_quote_with_ai(
                     logger.error(f"Error reading document file {doc.file_path}: {str(e)}")
         logger.debug("Documents loaded as base64: %d", len(document_files))
 
+        # Phase 2 RAG: retrieve real-world material prices to ground the LLM
+        # output. The query is built from the project description + the user's
+        # answers so the retrieved context matches the actual project scope.
+        material_context = None
+        if settings.rag_materials_enabled:
+            try:
+                rag_query_parts = [str(request.project_data.get("description", ""))]
+                for answer in request.answers[:5]:
+                    rag_query_parts.append(str(answer.get("answer", answer.get("value", ""))))
+                rag_query = " ".join(p for p in rag_query_parts if p).strip()
+                if rag_query:
+                    region = None
+                    if request.customer_address:
+                        plz_prefix = "".join(ch for ch in request.customer_address if ch.isdigit())[:1]
+                        region = f"DE-{plz_prefix}" if plz_prefix else None
+                    materials = await rag_service.retrieve_materials(
+                        db=db, query=rag_query, region=region, top_k=5,
+                    )
+                    material_context = rag_service.materials_to_prompt_context(materials)
+                    logger.info("RAG retrieved %d materials for quote", len(material_context))
+            except Exception as e:
+                logger.warning("RAG retrieval failed, continuing without: %s", e)
+
         result = await ai_service.process_answers_and_generate_quote(
             project_data=request.project_data,
             answers=request.answers,
             conversation_history=history,
             document_files=document_files,
+            material_context=material_context,
             **_resolve_cost_params(request, current_user)
         )
         # Create quote in database

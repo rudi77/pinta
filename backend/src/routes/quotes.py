@@ -25,9 +25,10 @@ pdf_service = ProfessionalPDFService()
 export_service = QuoteExportService()
 
 def generate_quote_number() -> str:
-    """Generate unique quote number"""
+    """Generate unique quote number: KV-YYYYMMDD-HHMMSS-<random>."""
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return f"KV-{timestamp}"
+    suffix = uuid.uuid4().hex[:6]
+    return f"KV-{timestamp}-{suffix}"
 
 async def check_user_quota(user: User, db: AsyncSession) -> bool:
     """Check if user can create a new quote"""
@@ -122,13 +123,13 @@ async def create_quote(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new quote"""
-    
+
     # Check user quota
-    # if not await check_user_quota(current_user, db):
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Quote limit reached. Please upgrade to premium or purchase additional quotes."
-    #     )
+    if not await check_user_quota(current_user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Quote limit reached. Please upgrade to premium or purchase additional quotes."
+        )
     
     # Create quote
     quote_number = generate_quote_number()
@@ -158,18 +159,18 @@ async def create_quote(
     
     # Add quote items
     total_amount = 0.0
-    for item_data in quote_data.quote_items:
+    for idx, item_data in enumerate(quote_data.items, start=1):
         quote_item = QuoteItem(
             quote_id=quote.id,
-            position=item_data.position,
+            position=item_data.position if item_data.position is not None else idx,
             description=item_data.description,
             quantity=item_data.quantity,
-            unit=item_data.unit,
+            unit=item_data.unit or "Stk",
             unit_price=item_data.unit_price,
             total_price=item_data.total_price,
             room_name=item_data.room_name,
             area_sqm=item_data.area_sqm,
-            work_type=item_data.work_type
+            work_type=item_data.work_type,
         )
         db.add(quote_item)
         total_amount += item_data.total_price
@@ -187,8 +188,8 @@ async def create_quote(
         .options(selectinload(Quote.quote_items))
     )
     quote = result.scalar_one()
-    
-    return quote
+
+    return quote_to_response(quote)
 
 @router.get("/{quote_id}", response_model=QuoteResponse)
 async def get_quote(
@@ -396,13 +397,13 @@ async def duplicate_quote(
     db: AsyncSession = Depends(get_db)
 ):
     """Duplicate an existing quote"""
-    
+
     # Check user quota
-    # if not await check_user_quota(current_user, db):
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Quote limit reached. Please upgrade to premium or purchase additional quotes."
-    #     )
+    if not await check_user_quota(current_user, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Quote limit reached. Please upgrade to premium or purchase additional quotes."
+        )
     
     result = await db.execute(
         select(Quote)

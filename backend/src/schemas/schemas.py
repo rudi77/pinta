@@ -17,6 +17,9 @@ class UserBase(BaseModel):
 
 class QuoteBase(BaseModel):
     customer_name: str
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+    customer_address: Optional[str] = None
     project_title: str
     project_description: str
     total_amount: float
@@ -29,6 +32,11 @@ class QuoteItemBase(BaseModel):
     quantity: float
     unit_price: float
     total_price: float
+    position: Optional[int] = None
+    unit: Optional[str] = "Stk"
+    room_name: Optional[str] = None
+    area_sqm: Optional[float] = None
+    work_type: Optional[str] = None
 
 class PaymentBase(BaseModel):
     amount: float
@@ -213,6 +221,60 @@ class AIQuoteGenerationResponse(BaseModel):
     total_amount: float
     conversation_history: List[AIConversationMessage]
     pdf_url: Optional[str] = None
+
+# Visual Estimate Models (Phase 1 - Multi-modal Vor-Ort-Schätzung)
+class VisualEstimateArea(BaseModel):
+    wall: Optional[float] = None
+    ceiling: Optional[float] = None
+    total: Optional[float] = None
+
+class VisualEstimateResponse(BaseModel):
+    room_type: str
+    estimated_area_sqm: VisualEstimateArea
+    area_confidence: str = Field(description="low|medium|high")
+    substrate_condition: str
+    required_prep_work: List[str] = Field(default_factory=list)
+    risk_factors: List[str] = Field(default_factory=list)
+    recommended_material_quality: str
+    estimated_labor_hours: float
+    summary: str
+
+# Material Price / RAG Models (Phase 2)
+class MaterialPriceBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    manufacturer: Optional[str] = Field(None, max_length=120)
+    category: Optional[str] = Field(None, max_length=80, description="e.g. paint, primer, tape, tool")
+    unit: str = Field(..., max_length=20, description="m², l, kg, Stk")
+    price_net: float = Field(..., ge=0, description="Netto-Preis in EUR")
+    region: Optional[str] = Field(None, max_length=20, description="PLZ-Präfix or region tag, e.g. 'DE', 'DE-1'")
+    source: Optional[str] = Field(None, max_length=120)
+    description: Optional[str] = None
+
+class MaterialPriceCreate(MaterialPriceBase):
+    pass
+
+class MaterialPriceUpdate(BaseModel):
+    name: Optional[str] = None
+    manufacturer: Optional[str] = None
+    category: Optional[str] = None
+    unit: Optional[str] = None
+    price_net: Optional[float] = Field(None, ge=0)
+    region: Optional[str] = None
+    source: Optional[str] = None
+    description: Optional[str] = None
+
+class MaterialPriceResponse(MaterialPriceBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class MaterialSearchResponse(BaseModel):
+    query: str
+    results: List[MaterialPriceResponse]
+    count: int
 
 # Quick Quote Models (MVP)
 class QuickQuoteRequest(BaseModel):

@@ -254,24 +254,26 @@ class QuotaService:
     
     async def reset_monthly_quotas(self, db: AsyncSession) -> Dict:
         """Reset monthly quotas for all users (typically run on 1st of month)"""
-        
+
         try:
-            # Reset quotes_this_month for all users
+            now = datetime.now(timezone.utc)
+            # Reset quotes_this_month and stamp last_quota_reset so the scheduler
+            # can detect missed resets on the next startup.
             result = await db.execute(
-                update(User).values(quotes_this_month=0)
+                update(User).values(quotes_this_month=0, last_quota_reset=now)
             )
-            
+
             await db.commit()
-            
+
             reset_info = {
-                'reset_date': datetime.now(timezone.utc).isoformat(),
+                'reset_date': now.isoformat(),
                 'users_affected': result.rowcount,
                 'reset_type': 'monthly_quotas'
             }
-            
+
             logger.info(f"Monthly quotas reset for {result.rowcount} users")
             return reset_info
-            
+
         except Exception as e:
             logger.error(f"Failed to reset monthly quotas: {e}")
             await db.rollback()

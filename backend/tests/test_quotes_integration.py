@@ -232,3 +232,30 @@ class TestQuotesIntegration:
         # Try to access the original user's quote
         response = await client.get(f"/api/v1/quotes/{test_quote.id}", headers=other_headers)
         assert response.status_code == 404  # Should not find quote from other user
+
+    async def test_free_tier_quota_blocks_fourth_quote(
+        self, client: AsyncClient, auth_headers: dict
+    ):
+        """Free users get 3 quotes/month; the 4th must be refused with 403."""
+        payload = {
+            "customer_name": "Quota Test",
+            "project_title": "Quota Test Project",
+            "project_description": "Verifying free-tier enforcement",
+            "total_amount": 100.0,
+            "items": [
+                {
+                    "description": "Test item",
+                    "quantity": 1,
+                    "unit_price": 100.0,
+                    "total_price": 100.0,
+                }
+            ],
+        }
+
+        for _ in range(3):
+            ok = await client.post("/api/v1/quotes/", json=payload, headers=auth_headers)
+            assert ok.status_code in (200, 201), ok.text
+
+        blocked = await client.post("/api/v1/quotes/", json=payload, headers=auth_headers)
+        assert blocked.status_code == 403
+        assert "limit reached" in blocked.json()["detail"].lower()

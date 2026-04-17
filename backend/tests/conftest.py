@@ -80,8 +80,8 @@ def create_test_app():
     )
     
     # Import and include routers
-    from src.routes import auth, users, quotes, ai, payments, chat, documents, quota
-    
+    from src.routes import auth, users, quotes, ai, payments, chat, documents, quota, materials
+
     app.include_router(auth.router, tags=["authentication"])
     app.include_router(users.router, tags=["users"])
     app.include_router(quotes.router)
@@ -90,6 +90,7 @@ def create_test_app():
     app.include_router(chat.router, tags=["chat"])
     app.include_router(documents.router, tags=["documents"])
     app.include_router(quota.router, tags=["quota"])
+    app.include_router(materials.router, tags=["materials"])
     
     return app
 

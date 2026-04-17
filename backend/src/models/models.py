@@ -232,25 +232,63 @@ class UsageTracking(Base):
     # Relationships
     user = relationship("User", back_populates="usage_tracking")
 
+class MaterialPrice(Base):
+    """RAG knowledge-base entry: a painting material with a real-world price.
+
+    Embeddings are stored as JSON text so the table works on both SQLite and
+    PostgreSQL without pgvector. Similarity search is done in Python
+    (see ``services.rag_service``). Upgrade path: add a pgvector column in a
+    future migration and keep the JSON as fallback.
+    """
+    __tablename__ = "material_prices"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False, index=True)
+    manufacturer = Column(String(120), nullable=True)
+    category = Column(String(80), nullable=True, index=True)  # paint, primer, tape, tool, ...
+    unit = Column(String(20), nullable=False)  # m², l, kg, Stk
+    price_net = Column(Float, nullable=False)
+    region = Column(String(20), nullable=True, index=True)  # e.g. 'DE', 'DE-1' for PLZ starting with 1
+    source = Column(String(120), nullable=True)  # origin of the data
+    description = Column(Text, nullable=True)
+
+    # JSON-serialized list[float] — embedding of "name + description + manufacturer"
+    embedding = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class QuotaNotification(Base):
     __tablename__ = "quota_notifications"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     # Notification details
     notification_type = Column(String(50), nullable=False)  # warning, limit_reached, reset
     resource_type = Column(String(50), nullable=False)  # quotes, documents, api_requests, storage
     threshold_percentage = Column(Float, nullable=False)
     message = Column(Text, nullable=False)
-    
+
     # Status
     is_read = Column(Boolean, default=False)
     sent_at = Column(DateTime)
-    
+
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())
-    
+
     # Relationships
     user = relationship("User", back_populates="quota_notifications")
+
+
+class EmailVerificationToken(Base):
+    __tablename__ = "email_verification_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token = Column(String(128), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
 
