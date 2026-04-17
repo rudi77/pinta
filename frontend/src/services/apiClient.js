@@ -194,7 +194,7 @@ class ApiClient {
 
   // Health check
   async healthCheck() {
-    const base = resolvedBase || 'http://localhost:8001'
+    const base = resolvedBase || 'http://localhost:8000'
     const response = await fetch(`${base}/health`)
     return await response.json()
   }
