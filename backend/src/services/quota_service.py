@@ -256,7 +256,7 @@ class QuotaService:
         """Reset monthly quotas for all users (typically run on 1st of month)"""
 
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.utcnow()
             # Reset quotes_this_month and stamp last_quota_reset so the scheduler
             # can detect missed resets on the next startup.
             result = await db.execute(
