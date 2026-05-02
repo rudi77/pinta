@@ -215,3 +215,7 @@ uploads
 documents/marktanalyse.md
 documents/marktanalyse.pdf
 backend/maler_kostenvoranschlag.db
+
+# Iteration script raw console logs (stderr captures with cp1252 artifacts).
+# JSON outputs and _evaluation.md notes ARE tracked as historical record.
+iteration_logs/**/_console*.log

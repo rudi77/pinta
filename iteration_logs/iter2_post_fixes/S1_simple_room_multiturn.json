@@ -1,0 +1,96 @@
+{
+  "scenario_id": "S1_simple_room",
+  "label": "Einzelnes Schlafzimmer streichen",
+  "elapsed_seconds": 10.65,
+  "analysis": {
+    "analysis": {
+      "project_type": "Schlafzimmer streichen",
+      "estimated_area": null,
+      "complexity": "medium",
+      "missing_info": [
+        "Fläche des Schlafzimmers (m²)",
+        "Höhe der Wände",
+        "Zustand der Wände (Risse, Löcher, etc.)",
+        "Zugang zum Raum (Möbel, Treppen, etc.)",
+        "Wunsch nach speziellen Materialien (z.B. umweltfreundliche Farben)"
+      ]
+    },
+    "questions": [
+      {
+        "id": "1",
+        "question": "Wie groß ist die Fläche des Schlafzimmers (in m²)?",
+        "type": "number"
+      },
+      {
+        "id": "2",
+        "question": "Wie hoch sind die Wände?",
+        "type": "number"
+      },
+      {
+        "id": "3",
+        "question": "Sind die Wände in einem guten Zustand oder müssen sie vor dem Streichen vorbereitet werden?",
+        "type": "multiple_choice",
+        "options": [
+          "Ja, sie sind in gutem Zustand",
+          "Nein, es gibt Risse oder Löcher"
+        ]
+      },
+      {
+        "id": "4",
+        "question": "Gibt es Möbel im Raum, die entfernt oder abgedeckt werden müssen?",
+        "type": "multiple_choice",
+        "options": [
+          "Ja, viele Möbel",
+          "Nein, der Raum ist leer"
+        ]
+      }
+    ],
+    "suggestions": [
+      "Bitte stellen Sie sicher, dass alle Möbel im Raum entweder entfernt oder abgedeckt werden, um Schäden an diesen zu vermeiden.",
+      "Falls Risse oder Löcher vorhanden sind, sollten diese vor dem Streichen repariert werden, um ein optimales Ergebnis zu erzielen."
+    ]
+  },
+  "quote": {
+    "quote": {
+      "project_title": "Komplettstreichen eines Schlafzimmers",
+      "subtotal": 470.0,
+      "vat_amount": 89.3,
+      "total_amount": 559.3,
+      "labor_hours": 10,
+      "hourly_rate": 50,
+      "material_cost": 120.0,
+      "additional_costs": 0.0
+    },
+    "items": [
+      {
+        "description": "Streichen Wände und Decke (39 m² Wandfläche + 14,7 m² Decke)",
+        "quantity": 53.7,
+        "unit": "m²",
+        "unit_price": 8.0,
+        "total_price": 429.6,
+        "category": "labor"
+      },
+      {
+        "description": "Standard-Dispersionfarbe (2 Anstriche für 53,7 m²)",
+        "quantity": 12,
+        "unit": "L",
+        "unit_price": 10.0,
+        "total_price": 120.0,
+        "category": "material"
+      },
+      {
+        "description": "Abdecken des Laminatbodens",
+        "quantity": 1,
+        "unit": "pauschal",
+        "unit_price": 0.0,
+        "total_price": 0.0,
+        "category": "additional"
+      }
+    ],
+    "notes": "Die alte Farbe ist gleichmäßig, daher sind nur leichte Vorarbeiten nötig. Der Preis für die Abdeckung des Laminatbodens ist in den Gesamtkosten enthalten.",
+    "recommendations": [
+      "Bitte sicherstellen, dass der Raum vor Arbeitsbeginn vollständig geräumt ist.",
+      "Es wird empfohlen, nach dem Streichen gut zu lüften."
+    ]
+  }
+}

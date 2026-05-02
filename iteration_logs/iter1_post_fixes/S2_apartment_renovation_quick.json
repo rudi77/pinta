@@ -1,0 +1,72 @@
+{
+  "scenario_id": "S2_apartment_renovation",
+  "label": "3-Zi-Wohnung Renovierung mit Vorarbeiten",
+  "elapsed_seconds": 10.66,
+  "result": {
+    "project_title": "Renovierung 3-Zimmer-Wohnung",
+    "items": [
+      {
+        "position": 1,
+        "description": "Vorarbeiten (Risse spachteln, Tapete entfernen)",
+        "quantity": 265.0,
+        "unit": "m²",
+        "unit_price": 30.0,
+        "total_price": 7950.0,
+        "category": "preparation"
+      },
+      {
+        "position": 2,
+        "description": "Wände streichen (Premium-Farbe, 2 Anstriche)",
+        "quantity": 265.0,
+        "unit": "m²",
+        "unit_price": 12.0,
+        "total_price": 3180.0,
+        "category": "labor"
+      },
+      {
+        "position": 3,
+        "description": "Decken streichen (Premium-Farbe, 2 Anstriche)",
+        "quantity": 78.0,
+        "unit": "m²",
+        "unit_price": 10.0,
+        "total_price": 780.0,
+        "category": "labor"
+      },
+      {
+        "position": 4,
+        "description": "Heizkörper streichen (Premium-Farbe)",
+        "quantity": 5.0,
+        "unit": "Stück",
+        "unit_price": 50.0,
+        "total_price": 250.0,
+        "category": "labor"
+      },
+      {
+        "position": 5,
+        "description": "Materialkosten (Premium-Farbe, Grundierung, Spachtelmasse)",
+        "quantity": 1.0,
+        "unit": "Pauschale",
+        "unit_price": 1200.0,
+        "total_price": 1200.0,
+        "category": "material"
+      },
+      {
+        "position": 6,
+        "description": "Abdeckmaterial und Verbrauchsmaterial",
+        "quantity": 1.0,
+        "unit": "Pauschale",
+        "unit_price": 150.0,
+        "total_price": 150.0,
+        "category": "material"
+      }
+    ],
+    "subtotal": 12610.0,
+    "vat_amount": 2396.9,
+    "total_amount": 14996.9,
+    "notes": "Die Streichfläche wurde auf Basis der Wohnfläche und der Deckenhöhe kalkuliert. Risse wurden als umfangreiche Vorarbeiten berücksichtigt. Premium-Farbe aufgrund Allergiker-Anforderung eingeplant.",
+    "recommendations": [
+      "Regelmäßige Wartung der Wände und Decken empfehlen",
+      "Verwendung von allergikerfreundlichen Materialien"
+    ]
+  }
+}

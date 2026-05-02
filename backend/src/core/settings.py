@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # Feature flags
     vision_estimate_enabled: bool = True
     rag_materials_enabled: bool = True
+    # When True, AI service errors are raised instead of falling back to static
+    # mock responses. Use in tests / iteration scripts so silent failures (e.g.
+    # broken prompts, invalid API keys) surface immediately. Production stays
+    # False so transient OpenAI hiccups don't break user-facing flows.
+    ai_strict_mode: bool = False
     
     # CORS
     allowed_origins: Union[str, List[str]] = "http://localhost:5173,http://localhost:3000"
@@ -109,6 +114,7 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
         case_sensitive = False
         env_ignore_empty = True
+        extra = "ignore"
 
 
 # Global settings instance - lazy loading to avoid initialization issues

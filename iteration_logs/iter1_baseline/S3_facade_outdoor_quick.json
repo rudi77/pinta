@@ -1,0 +1,81 @@
+{
+  "scenario_id": "S3_facade_outdoor",
+  "label": "Fassadenanstrich Einfamilienhaus",
+  "elapsed_seconds": 10.37,
+  "result": {
+    "project_title": "Außenfassade neu streichen",
+    "items": [
+      {
+        "position": 1,
+        "description": "Vorarbeiten: Abkleben und Abdecken der Flächen",
+        "quantity": 240.0,
+        "unit": "m²",
+        "unit_price": 2.0,
+        "total_price": 480.0,
+        "category": "preparation"
+      },
+      {
+        "position": 2,
+        "description": "Algenentferner für die Fassadenbehandlung",
+        "quantity": 1.0,
+        "unit": "Liter",
+        "unit_price": 15.0,
+        "total_price": 15.0,
+        "category": "material"
+      },
+      {
+        "position": 3,
+        "description": "Grundierung für die Fassade",
+        "quantity": 10.0,
+        "unit": "Liter",
+        "unit_price": 8.0,
+        "total_price": 80.0,
+        "category": "material"
+      },
+      {
+        "position": 4,
+        "description": "Farbe (Cremegelb) für die Fassade",
+        "quantity": 20.0,
+        "unit": "Liter",
+        "unit_price": 15.0,
+        "total_price": 300.0,
+        "category": "material"
+      },
+      {
+        "position": 5,
+        "description": "Streichen der Fassadenfläche",
+        "quantity": 240.0,
+        "unit": "m²",
+        "unit_price": 5.0,
+        "total_price": 1200.0,
+        "category": "labor"
+      },
+      {
+        "position": 6,
+        "description": "Streichen der Holzfensterläden (12 Stück)",
+        "quantity": 8.64,
+        "unit": "m²",
+        "unit_price": 6.0,
+        "total_price": 51.84,
+        "category": "labor"
+      },
+      {
+        "position": 7,
+        "description": "Gerüststellung",
+        "quantity": 1.0,
+        "unit": "Stück",
+        "unit_price": 500.0,
+        "total_price": 500.0,
+        "category": "material"
+      }
+    ],
+    "subtotal": 2627.84,
+    "vat_amount": 499.29,
+    "total_amount": 3127.13,
+    "notes": "Die Flächenangaben sind geschätzt. Bei weiteren Fragen stehe ich Ihnen gerne zur Verfügung.",
+    "recommendations": [
+      "Regelmäßige Wartung der Fassade zur Vermeidung von Algenbefall",
+      "Verwendung von hochwertigen Farben für längere Haltbarkeit"
+    ]
+  }
+}

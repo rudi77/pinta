@@ -1,0 +1,112 @@
+{
+  "scenario_id": "S2_apartment_renovation",
+  "label": "3-Zi-Wohnung Renovierung mit Vorarbeiten",
+  "elapsed_seconds": 14.48,
+  "analysis": {
+    "analysis": {
+      "project_type": "Wohnungsrenovierung",
+      "estimated_area": null,
+      "complexity": "medium",
+      "missing_info": [
+        "Gesamtfläche der zu renovierenden Räume",
+        "Höhe der Decken",
+        "Zustand der Wände (z.B. ob sie grundiert werden müssen)",
+        "Materialwünsche für Farbe oder Tapete",
+        "Zeitrahmen für die Renovierung",
+        "Zugänglichkeit der Wohnung"
+      ]
+    },
+    "questions": [
+      {
+        "id": "q1",
+        "question": "Wie groß ist die Gesamtfläche der zu renovierenden Räume?",
+        "type": "number"
+      },
+      {
+        "id": "q2",
+        "question": "Welchen Zustand haben die Wände? Müssen sie vor dem Streichen grundiert werden?",
+        "type": "text"
+      },
+      {
+        "id": "q3",
+        "question": "Welche Art von Materialien (z.B. Farben, Tapeten) wünschen Sie für die Renovierung?",
+        "type": "multiple_choice",
+        "options": [
+          "Latexfarbe",
+          "Dispersionsfarbe",
+          "Vliestapete",
+          "Keine speziellen Wünsche"
+        ]
+      },
+      {
+        "id": "q4",
+        "question": "Welchen Zeitrahmen haben Sie für die Renovierung eingeplant?",
+        "type": "text"
+      }
+    ],
+    "suggestions": [
+      "Es wäre hilfreich, die genauen Maße der Räume zu haben, um die benötigte Menge an Material genau kalkulieren zu können.",
+      "Überlegen Sie, ob Sie eine spezielle Farbe oder Tapete bevorzugen, um die Kosten besser einschätzen zu können.",
+      "Denken Sie daran, die Zugänglichkeit der Wohnung für die Handwerker zu klären, um Verzögerungen zu vermeiden."
+    ]
+  },
+  "quote": {
+    "quote": {
+      "project_title": "Renovierung 3-Zimmer-Wohnung",
+      "subtotal": 3500,
+      "vat_amount": 665,
+      "total_amount": 4165,
+      "labor_hours": 70,
+      "hourly_rate": 50,
+      "material_cost": 1200,
+      "additional_costs": 0
+    },
+    "items": [
+      {
+        "description": "Wände spachteln (Risse)",
+        "quantity": 175,
+        "unit": "m²",
+        "unit_price": 0.5,
+        "total_price": 87.5,
+        "category": "additional"
+      },
+      {
+        "description": "Isoliergrundierung für Wasserfleck",
+        "quantity": 10,
+        "unit": "L",
+        "unit_price": 10,
+        "total_price": 100,
+        "category": "material"
+      },
+      {
+        "description": "Premium-Allergiker-Dispersionfarbe (2 Anstriche)",
+        "quantity": 65,
+        "unit": "L",
+        "unit_price": 15,
+        "total_price": 975,
+        "category": "material"
+      },
+      {
+        "description": "Streichen Wände und Decken",
+        "quantity": 240,
+        "unit": "m²",
+        "unit_price": 12,
+        "total_price": 2880,
+        "category": "labor"
+      },
+      {
+        "description": "Heizkörper umstreichen",
+        "quantity": 5,
+        "unit": "Stück",
+        "unit_price": 50,
+        "total_price": 250,
+        "category": "labor"
+      }
+    ],
+    "notes": "Die Wohnung ist leerstehend und hat eine gute Zugänglichkeit. Die Arbeiten umfassen das Spachteln von Rissen, die Behandlung eines Wasserflecks mit Isoliergrundierung sowie das Streichen von Wänden und Decken mit Premium-Allergiker-Dispersionfarbe. Heizkörper werden ebenfalls umgestrichen.",
+    "recommendations": [
+      "Verwendung von hochwertiger Premiumfarbe für Allergiker.",
+      "Regelmäßige Kontrolle der Wände auf weitere Schäden nach der Renovierung."
+    ]
+  }
+}

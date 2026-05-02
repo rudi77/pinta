@@ -1,0 +1,103 @@
+{
+  "scenario_id": "S1_simple_room",
+  "label": "Einzelnes Schlafzimmer streichen",
+  "elapsed_seconds": 23.0,
+  "analysis": {
+    "analysis": {
+      "project_type": "Schlafzimmer streichen",
+      "estimated_area": null,
+      "complexity": "medium",
+      "missing_info": [
+        "genaue Quadratmeterzahl der Wände und Decke",
+        "Höhe der Wände",
+        "Zustand der Oberflächen (z.B. Risse, Löcher)",
+        "Zugänglichkeit des Raumes (z.B. Möbel, Fenster)"
+      ]
+    },
+    "questions": [
+      {
+        "id": "q1",
+        "question": "Wie groß ist die Fläche der Wände und Decke in Quadratmetern?",
+        "type": "number"
+      },
+      {
+        "id": "q2",
+        "question": "Wie hoch sind die Wände im Schlafzimmer?",
+        "type": "number"
+      },
+      {
+        "id": "q3",
+        "question": "In welchem Zustand sind die Wände und die Decke? Gibt es Risse oder Löcher?",
+        "type": "text"
+      },
+      {
+        "id": "q4",
+        "question": "Wie ist die Zugänglichkeit des Raumes? Müssen Möbel umgestellt werden?",
+        "type": "text"
+      }
+    ],
+    "suggestions": [
+      "Bitte messen Sie die Fläche der Wände und Decke, um eine genauere Kalkulation zu ermöglichen.",
+      "Überlegen Sie, ob spezielle Vorarbeiten wie das Ausbessern von Rissen notwendig sind.",
+      "Informieren Sie uns über die Zugänglichkeit des Raumes, um die Arbeitszeit besser einschätzen zu können."
+    ]
+  },
+  "quote": {
+    "quote": {
+      "project_title": "Schlafzimmer komplett streichen",
+      "total_amount": 1226.8,
+      "labor_hours": 12,
+      "hourly_rate": 55,
+      "material_cost": 180,
+      "additional_costs": 0
+    },
+    "items": [
+      {
+        "description": "Arbeitszeit Maler",
+        "quantity": 12,
+        "unit": "Stunden",
+        "unit_price": 55,
+        "total_price": 660,
+        "category": "labor"
+      },
+      {
+        "description": "Standard-Dispersionfarbe, weiß",
+        "quantity": 15,
+        "unit": "Liter",
+        "unit_price": 10,
+        "total_price": 150,
+        "category": "material"
+      },
+      {
+        "description": "Grundierung (optional, falls benötigt)",
+        "quantity": 5,
+        "unit": "Liter",
+        "unit_price": 8,
+        "total_price": 40,
+        "category": "material"
+      },
+      {
+        "description": "Abdeckmaterial für Laminatboden",
+        "quantity": 1,
+        "unit": "Set",
+        "unit_price": 30,
+        "total_price": 30,
+        "category": "material"
+      },
+      {
+        "description": "Werkzeugkosten (Pinsel, Rollen, Abdeckband)",
+        "quantity": 1,
+        "unit": "Set",
+        "unit_price": 30,
+        "total_price": 30,
+        "category": "material"
+      }
+    ],
+    "notes": "Die Möbel werden vom Kunden ausgeräumt, daher entfällt der Aufwand für Möbelrücken. Die alte Farbe ist gleichmäßig, was die Vorarbeit erleichtert. Die Deckenhöhe und Zugänglichkeit sind standardmäßig, keine besonderen Schwierigkeiten.",
+    "recommendations": [
+      "Die Wände und Decke sollten vor dem Streichen gründlich gereinigt werden.",
+      "Es wird empfohlen, die Farbe in zwei Schichten aufzutragen, um ein gleichmäßiges Ergebnis zu erzielen.",
+      "Falls die Grundierung nicht notwendig ist, kann sie weggelassen werden, was die Materialkosten senkt."
+    ]
+  }
+}

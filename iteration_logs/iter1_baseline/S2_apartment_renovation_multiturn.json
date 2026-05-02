@@ -1,0 +1,110 @@
+{
+  "scenario_id": "S2_apartment_renovation",
+  "label": "3-Zi-Wohnung Renovierung mit Vorarbeiten",
+  "elapsed_seconds": 20.2,
+  "analysis": {
+    "analysis": {
+      "project_type": "Wohnungsrenovierung",
+      "estimated_area": null,
+      "complexity": "medium",
+      "missing_info": [
+        "Gesamtfläche der Wohnung",
+        "Höhe der Decken",
+        "Zustand der Wände (außer Risse und Wasserfleck)",
+        "Materialien für die Renovierung (Farbe, Tapete, etc.)",
+        "Zeitrahmen für die Renovierung",
+        "Zugänglichkeit der Räume"
+      ]
+    },
+    "questions": [
+      {
+        "id": "q1",
+        "question": "Wie groß ist die Gesamtfläche der zu renovierenden Räume?",
+        "type": "number"
+      },
+      {
+        "id": "q2",
+        "question": "Welches Material wünschen Sie für die Wände? (z.B. Farbe, Tapete)",
+        "type": "multiple_choice",
+        "options": [
+          "Farbe",
+          "Tapete",
+          "Beides",
+          "Sonstiges"
+        ]
+      },
+      {
+        "id": "q3",
+        "question": "Wie hoch sind die Decken in den jeweiligen Räumen?",
+        "type": "number"
+      },
+      {
+        "id": "q4",
+        "question": "Gibt es einen bestimmten Zeitrahmen, in dem die Renovierung abgeschlossen sein soll?",
+        "type": "text"
+      }
+    ],
+    "suggestions": [
+      "Bitte stellen Sie sicher, dass die Räume während der Renovierung zugänglich sind.",
+      "Überlegen Sie, ob Sie eine spezielle Farbe oder Tapete für die Wände wünschen, um den Raum zu gestalten.",
+      "Es könnte hilfreich sein, die Risse und den Wasserfleck vor der Renovierung genauer zu untersuchen."
+    ]
+  },
+  "quote": {
+    "quote": {
+      "project_title": "Renovierung einer 3-Zimmer-Wohnung",
+      "total_amount": 4725.0,
+      "labor_hours": 80,
+      "hourly_rate": 55,
+      "material_cost": 1500.0,
+      "additional_costs": 0.0
+    },
+    "items": [
+      {
+        "description": "Arbeitszeit für Renovierung (80 Stunden)",
+        "quantity": 80,
+        "unit": "Stunden",
+        "unit_price": 55.0,
+        "total_price": 4400.0,
+        "category": "labor"
+      },
+      {
+        "description": "Premium-Allergiker-Dispersionfarbe (z.B. Alpina Allergiker) für Wände",
+        "quantity": 30,
+        "unit": "Liter",
+        "unit_price": 40.0,
+        "total_price": 1200.0,
+        "category": "material"
+      },
+      {
+        "description": "Isoliergrundierung für Wasserfleck",
+        "quantity": 5,
+        "unit": "Liter",
+        "unit_price": 25.0,
+        "total_price": 125.0,
+        "category": "material"
+      },
+      {
+        "description": "Spachtelmasse für Risse",
+        "quantity": 10,
+        "unit": "kg",
+        "unit_price": 5.0,
+        "total_price": 50.0,
+        "category": "material"
+      },
+      {
+        "description": "Werkzeugmiete (Rolle, Pinsel, Abdeckmaterial)",
+        "quantity": 1,
+        "unit": "Paket",
+        "unit_price": 125.0,
+        "total_price": 125.0,
+        "category": "material"
+      }
+    ],
+    "notes": "Die Wohnung ist leerstehend und hat eine gute Zugänglichkeit, was die Arbeiten erleichtert. Die Verwendung von Premiumfarbe ist aufgrund der Allergiker-Anforderungen berücksichtigt.",
+    "recommendations": [
+      "Vor Beginn der Arbeiten sollte eine gründliche Inspektion der Wände erfolgen, um sicherzustellen, dass keine weiteren Schäden vorhanden sind.",
+      "Es wird empfohlen, die Fenster und Türen während der Arbeiten gut abzudecken, um Farb- und Spachtelreste zu vermeiden."
+    ]
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "scenario_id": "S1_simple_room",
+  "label": "Einzelnes Schlafzimmer streichen",
+  "elapsed_seconds": 7.89,
+  "result": {
+    "project_title": "Schlafzimmer streichen",
+    "items": [
+      {
+        "position": 1,
+        "description": "Wände und Decke streichen (inkl. Vorarbeiten)",
+        "quantity": 35.0,
+        "unit": "m²",
+        "unit_price": 12.0,
+        "total_price": 420.0,
+        "category": "labor"
+      },
+      {
+        "position": 2,
+        "description": "Dispersionsfarbe (2 Anstriche)",
+        "quantity": 10.0,
+        "unit": "L",
+        "unit_price": 15.0,
+        "total_price": 150.0,
+        "category": "material"
+      },
+      {
+        "position": 3,
+        "description": "Abdeckmaterial für Boden",
+        "quantity": 1.0,
+        "unit": "Stück",
+        "unit_price": 20.0,
+        "total_price": 20.0,
+        "category": "material"
+      },
+      {
+        "position": 4,
+        "description": "Vorarbeiten (Abkleben und Abdecken)",
+        "quantity": 1.0,
+        "unit": "Stück",
+        "unit_price": 50.0,
+        "total_price": 50.0,
+        "category": "preparation"
+      }
+    ],
+    "subtotal": 640.0,
+    "vat_amount": 121.6,
+    "total_amount": 761.6,
+    "notes": "Annahme: Streichfläche berechnet mit 3.4 × Wohnfläche. Fenster und Tür wurden abgezogen.",
+    "recommendations": [
+      "Für eine optimale Deckkraft sind zwei Anstriche empfehlenswert."
+    ]
+  }
+}

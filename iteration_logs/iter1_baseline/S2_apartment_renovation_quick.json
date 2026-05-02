@@ -1,0 +1,63 @@
+{
+  "scenario_id": "S2_apartment_renovation",
+  "label": "3-Zi-Wohnung Renovierung mit Vorarbeiten",
+  "elapsed_seconds": 7.94,
+  "result": {
+    "project_title": "Renovierung 3-Zimmer-Wohnung",
+    "items": [
+      {
+        "position": 1,
+        "description": "Vorarbeiten (Abkleben, Abdecken, Grundierung)",
+        "quantity": 78.0,
+        "unit": "m²",
+        "unit_price": 3.5,
+        "total_price": 273.0,
+        "category": "preparation"
+      },
+      {
+        "position": 2,
+        "description": "Wände streichen mit Premium-Farbe",
+        "quantity": 78.0,
+        "unit": "m²",
+        "unit_price": 10.0,
+        "total_price": 780.0,
+        "category": "labor"
+      },
+      {
+        "position": 3,
+        "description": "Decken streichen mit Premium-Farbe",
+        "quantity": 78.0,
+        "unit": "m²",
+        "unit_price": 8.0,
+        "total_price": 624.0,
+        "category": "labor"
+      },
+      {
+        "position": 4,
+        "description": "Heizkörper streichen",
+        "quantity": 5.0,
+        "unit": "Stück",
+        "unit_price": 25.0,
+        "total_price": 125.0,
+        "category": "labor"
+      },
+      {
+        "position": 5,
+        "description": "Materialkosten (Premium-Farbe, Grundierung, Abdeckmaterial)",
+        "quantity": 1.0,
+        "unit": "Paket",
+        "unit_price": 300.0,
+        "total_price": 300.0,
+        "category": "material"
+      }
+    ],
+    "subtotal": 2102.0,
+    "vat_amount": 399.38,
+    "total_amount": 2501.38,
+    "notes": "Die Flächenangaben basieren auf einer Schätzung der Wohnfläche. Bei weiteren Informationen oder Änderungen der Flächen kann sich der Preis entsprechend anpassen.",
+    "recommendations": [
+      "Für Allergiker geeignete Farben verwenden",
+      "Regelmäßige Kontrolle der Wände auf Feuchtigkeitsschäden"
+    ]
+  }
+}

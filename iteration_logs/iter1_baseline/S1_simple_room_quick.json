@@ -1,0 +1,53 @@
+{
+  "scenario_id": "S1_simple_room",
+  "label": "Einzelnes Schlafzimmer streichen",
+  "elapsed_seconds": 6.95,
+  "result": {
+    "project_title": "Schlafzimmer streichen",
+    "items": [
+      {
+        "position": 1,
+        "description": "Wände und Decke streichen (inkl. Vorarbeiten)",
+        "quantity": 42.0,
+        "unit": "m²",
+        "unit_price": 50.0,
+        "total_price": 2100.0,
+        "category": "labor"
+      },
+      {
+        "position": 2,
+        "description": "Farbe (Standard-Qualität, 10l)",
+        "quantity": 1.0,
+        "unit": "Eimer",
+        "unit_price": 50.0,
+        "total_price": 50.0,
+        "category": "material"
+      },
+      {
+        "position": 3,
+        "description": "Grundierung (5l)",
+        "quantity": 1.0,
+        "unit": "Eimer",
+        "unit_price": 30.0,
+        "total_price": 30.0,
+        "category": "material"
+      },
+      {
+        "position": 4,
+        "description": "Abdeckmaterial (Boden abdecken)",
+        "quantity": 1.0,
+        "unit": "Paket",
+        "unit_price": 20.0,
+        "total_price": 20.0,
+        "category": "material"
+      }
+    ],
+    "subtotal": 2200.0,
+    "vat_amount": 418.0,
+    "total_amount": 2618.0,
+    "notes": "Die Flächenangaben basieren auf einer Schätzung. Die tatsächliche Fläche kann je nach Gegebenheiten variieren.",
+    "recommendations": [
+      "Bitte stellen Sie sicher, dass der Raum vor Beginn der Arbeiten vollständig leer ist."
+    ]
+  }
+}

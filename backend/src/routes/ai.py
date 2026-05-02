@@ -374,7 +374,7 @@ async def generate_quote_with_ai(
         db.add(quote)
         await db.flush()
         # Add quote items
-        total_amount = 0.0
+        subtotal_net = 0.0
         quote_items_dicts = []
         for idx, item in enumerate(result["items"], start=1):
             quote_item = QuoteItem(
@@ -390,7 +390,7 @@ async def generate_quote_with_ai(
                 work_type=item.get("work_type")
             )
             db.add(quote_item)
-            total_amount += item["total_price"]
+            subtotal_net += item["total_price"]
             quote_items_dicts.append({
                 "id": quote_item.id,
                 "quote_id": quote_item.quote_id,
@@ -404,8 +404,10 @@ async def generate_quote_with_ai(
                 "created_at": quote_item.created_at,
                 "updated_at": quote_item.updated_at
             })
-        # Update quote with total amount
-        quote.total_amount = total_amount
+        # Quote total is always BRUTTO (subtotal + 19% MwSt) — items hold the
+        # net per-position prices. LLM occasionally returns net here despite
+        # explicit instructions, so we recompute deterministically.
+        quote.total_amount = round(subtotal_net * 1.19, 2)
         await db.commit()
         pdf_data = {
             "quote_number": quote.quote_number,

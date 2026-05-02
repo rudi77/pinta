@@ -1,0 +1,93 @@
+{
+  "scenario_id": "S1_simple_room",
+  "label": "Einzelnes Schlafzimmer streichen",
+  "elapsed_seconds": 15.78,
+  "analysis": {
+    "analysis": {
+      "project_type": "Schlafzimmer streichen",
+      "estimated_area": null,
+      "complexity": "medium",
+      "missing_info": [
+        "Fläche des Schlafzimmers",
+        "Höhe der Wände",
+        "Zustand der Wände (z.B. Risse, Löcher)",
+        "Zugänglichkeit des Raumes (Möbel, Fenster etc.)",
+        "Zeitrahmen für die Fertigstellung"
+      ]
+    },
+    "questions": [
+      {
+        "id": "q1",
+        "question": "Wie groß ist die Fläche der Wände und Decke, die gestrichen werden sollen?",
+        "type": "number"
+      },
+      {
+        "id": "q2",
+        "question": "Wie hoch sind die Wände im Schlafzimmer?",
+        "type": "number"
+      },
+      {
+        "id": "q3",
+        "question": "In welchem Zustand sind die Wände (z.B. Risse, Löcher)?",
+        "type": "text"
+      },
+      {
+        "id": "q4",
+        "question": "Wie ist der Zugang zum Schlafzimmer (sind Möbel im Weg, gibt es Fenster?)?",
+        "type": "text"
+      },
+      {
+        "id": "q5",
+        "question": "Bis wann möchten Sie mit dem Streichen fertig sein?",
+        "type": "text"
+      }
+    ],
+    "suggestions": [
+      "Bitte stellen Sie sicher, dass der Raum frei von Möbeln ist, um den Zugang zu erleichtern.",
+      "Es könnte hilfreich sein, die Wände vorher zu reinigen oder kleine Risse auszubessern, um ein besseres Ergebnis zu erzielen."
+    ]
+  },
+  "quote": {
+    "quote": {
+      "project_title": "Komplettstreichen eines Schlafzimmers",
+      "subtotal": 622.5,
+      "vat_amount": 118.27,
+      "total_amount": 740.77,
+      "labor_hours": 10,
+      "hourly_rate": 55,
+      "material_cost": 200,
+      "additional_costs": 0
+    },
+    "items": [
+      {
+        "description": "Arbeitszeit für Streichen (Wände und Decke)",
+        "quantity": 10,
+        "unit": "h",
+        "unit_price": 55,
+        "total_price": 550,
+        "category": "labor"
+      },
+      {
+        "description": "Dispersionsfarbe Standard, weiß",
+        "quantity": 10,
+        "unit": "L",
+        "unit_price": 20,
+        "total_price": 200,
+        "category": "material"
+      },
+      {
+        "description": "Abdeckmaterial für Boden",
+        "quantity": 1,
+        "unit": "pauschal",
+        "unit_price": 20,
+        "total_price": 20,
+        "category": "additional"
+      }
+    ],
+    "notes": "Die Wandfläche wurde auf 39 m² und die Deckenfläche auf 14,7 m² geschätzt. Es wurde eine Standard-Dispersion verwendet, die für 2 Anstriche kalkuliert wurde. Die Arbeitszeit umfasst das Streichen der Wände und Decke sowie die Vorbereitung des Raumes (Abdecken des Bodens).",
+    "recommendations": [
+      "Überprüfen Sie die Farbe nach dem ersten Anstrich und entscheiden Sie, ob ein dritter Anstrich notwendig ist.",
+      "Lassen Sie den Raum nach dem Streichen gut lüften, um die Trocknungszeit zu verkürzen."
+    ]
+  }
+}

@@ -10,6 +10,51 @@ from src.core.settings import settings
 logger = logging.getLogger(__name__)
 
 class AIService:
+    # Domain anchors injected into all quote-generation prompts. Goal: stop the
+    # LLM from hallucinating sqm out of "Wohnfläche", and stop pricing from
+    # drifting between "5 €/m²" and "50 €/m²" for the same kind of work.
+    # Numbers reflect typical DE 2026 net pricing for Maler-Handwerk.
+    _PLAUSIBILITY_RULES = """PLAUSIBILITÄTSREGELN (verbindlich für realistische Quoten):
+
+FLÄCHEN-FAUSTREGELN:
+- Verwechsle NIEMALS Wohnfläche mit Streichfläche.
+  Bei Standardraumhöhe (~2.5 m): Wandfläche ≈ 2.4 × Wohnfläche (Türen/Fenster abgezogen).
+  Decke ≈ Wohnfläche.
+  Streichfläche gesamt ≈ 3.4 × Wohnfläche, wenn Decken mit gestrichen werden.
+
+INPUT-TREUE (KRITISCH):
+- Wenn der Kunde explizit eine Endmenge angibt (z.B. "17 m² Holzfläche gesamt", "240 m² Fassade",
+  "175 m² Wandfläche"), MUSST du genau diesen Wert übernehmen.
+- Rechne NICHT selbst nach (z.B. 12 Stück × 1.2 m × 0.6 m = 8.64 m²) wenn die Gesamtsumme bereits genannt wurde.
+- Eigene Berechnungen sind nur dann erlaubt, wenn KEINE Endmenge geliefert wurde.
+
+PREIS-FAUSTREGELN (€/m² sind GESAMTPREISE inkl. Lohn UND Material UND Vorarbeiten — NICHT additiv kombinieren!):
+- Innenraum-Streichen Standard (Wand+Decke, Lohn+Material+Standard-Vorarbeiten): 8–15 €/m² Streichfläche.
+- Innenraum mit umfangreichen Vorarbeiten (Spachteln, Tapete entfernen, Schimmelsanierung): 25–40 €/m² als Gesamttarif.
+- Fassade Standard (Lohn+Material, OHNE Gerüst): 25–45 €/m² als Gesamttarif.
+- Gerüst Einfamilienhaus (~200–300 m² Fassade, 2 Wochen Standzeit): 1500–3000 € pauschal (separate Position).
+
+WICHTIG zur Tarif-Anwendung:
+- Wähle EIN Tarifband pro Leistungsbereich (Innen oder Außen).
+- Vorarbeiten sind im €/m²-Tarif bereits ENTHALTEN — füge KEINE separate "Vorarbeiten X m² × Y €/m²"-Zeile zusätzlich zum Streich-Tarif hinzu.
+- Wenn du Vorarbeiten als eigene Position ausweisen willst: nutze entweder Pauschale (z.B. 200-500 € für Standard-Vorarbeiten) ODER Stunden-Position (Std × Stundensatz), NICHT noch ein €/m²-Tarif obendrauf.
+
+LOHN-FAUSTREGELN (für Stunden-basierte Positionen):
+- Innenraum-Streichen Standard: 1 Maler schafft 5–7 m² Streichfläche pro Stunde.
+- Innenraum mit umfangreichen Vorarbeiten: 3–4 m²/h.
+- Fassade Standard (mit Gerüst gestellt): 4–5 m²/h.
+- Stundensätze DE 2026: 50–65 €/h netto (Standard), 65–80 €/h komplexe Spezialarbeit.
+
+UNSICHERHEIT:
+- Wenn Mengenangaben fehlen: Faustregeln + Mitte des Bereichs anwenden, Annahme im 'notes'-Feld vermerken."""
+
+    _MATERIAL_USAGE_RULES = """MATERIAL-VERBRAUCH (Faustregeln für Mengenkalkulation):
+- Dispersionsfarbe Innen: 1 L deckt ~5–7 m² (1 Anstrich). Bei 2 Anstrichen Verbrauch verdoppeln.
+- Silikatfarbe Fassade: 1 L deckt ~4–6 m² (typisch 2 Anstriche).
+- Tiefgrund / Isoliergrund: 1 L deckt ~6–8 m².
+- Spachtelmasse für Risse: ca. 1 kg pro 3–5 m Wandlänge mit Rissen.
+- Kalkuliere Materialmengen IMMER aus der Streichfläche und diesen Faustregeln, nicht aus Bauchgefühl."""
+
     def __init__(self):
         api_key = settings.openai_api_key
         if api_key and api_key != 'test_key_placeholder' and api_key.startswith('sk-'):
@@ -29,6 +74,14 @@ class AIService:
             self.embedding_model = None
             self.enabled = False
             logger.warning("OpenAI API key not configured, using mock responses")
+
+    def _raise_if_strict(self, exc: Exception) -> None:
+        """In strict mode (settings.ai_strict_mode), surface AI errors instead
+        of silently falling back to static mock data. Used by tests and
+        iteration scripts so broken prompts / invalid keys don't get masked.
+        """
+        if settings.ai_strict_mode:
+            raise exc
 
     async def visual_estimate(self, image_b64: str, mime_type: str,
                               extra_context: Optional[str] = None) -> Dict:
@@ -95,11 +148,13 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Schema (kein Markdown):
             )
             content = response.choices[0].message.content
             return json.loads(content)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
             logger.error("Vision estimate returned invalid JSON: %s", content)
+            self._raise_if_strict(e)
             return self._get_mock_visual_estimate()
         except Exception as e:
             logger.error("Vision estimate error: %s", e)
+            self._raise_if_strict(e)
             return self._get_mock_visual_estimate()
 
     def _get_mock_visual_estimate(self) -> Dict:
@@ -216,12 +271,14 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Schema (kein Markdown):
                 content = content.replace('```json', '').replace('```', '')
                 result = json.loads(content)
                 return result
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as je:
                 logger.error(f"Failed to parse OpenAI JSON response: {content}")
+                self._raise_if_strict(je)
                 return self._get_mock_analysis_response(description)
 
         except Exception as e:
             logger.error(f"OpenAI API error: {str(e)}")
+            self._raise_if_strict(e)
             return self._get_mock_analysis_response(description)
 
     async def process_answers_and_generate_quote(self,
@@ -250,35 +307,46 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Schema (kein Markdown):
 
             {self._build_material_context_block(material_context)}
 
+            {self._PLAUSIBILITY_RULES}
+
+            {self._MATERIAL_USAGE_RULES}
+
             Berücksichtige außerdem:
             - Schwierigkeitsgrad und Zugänglichkeit
             - Regionale Preisunterschiede (Deutschland)
-            - Mehrwertsteuer (19%)
             - Die Inhalte und Hinweise aus den hochgeladenen Dokumenten
 
+            STEUER-AUSWEIS (verbindlich):
+            - subtotal = Summe aller Positionen NETTO
+            - vat_amount = subtotal × 0.19 (MwSt 19%)
+            - total_amount = subtotal + vat_amount (BRUTTO — was der Kunde zahlt)
+            - Niemals total_amount als Netto-Summe ausweisen.
+
             Antworte im JSON-Format:
-            {
-                "quote": {
+            {{
+                "quote": {{
                     "project_title": "string",
+                    "subtotal": number,
+                    "vat_amount": number,
                     "total_amount": number,
                     "labor_hours": number,
                     "hourly_rate": number,
                     "material_cost": number,
                     "additional_costs": number
-                },
+                }},
                 "items": [
-                    {
+                    {{
                         "description": "string",
                         "quantity": number,
                         "unit": "string",
                         "unit_price": number,
                         "total_price": number,
                         "category": "labor|material|additional"
-                    }
+                    }}
                 ],
                 "notes": "string",
                 "recommendations": ["string"]
-            }"""
+            }}"""
 
             # Build conversation context
             messages = [{"role": "system", "content": system_prompt}]
@@ -317,16 +385,24 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Schema (kein Markdown):
             )
 
             content = response.choices[0].message.content
-            
+
             try:
+                # gpt-4o-mini sometimes wraps JSON in ```json ... ``` fences
+                # despite instructions; strip them to keep the parser robust.
+                if content.strip().startswith("```"):
+                    lines = content.strip().split("\n")
+                    lines = [l for l in lines if not l.strip().startswith("```")]
+                    content = "\n".join(lines)
                 result = json.loads(content)
                 return result
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as je:
                 logger.error(f"Failed to parse OpenAI quote JSON: {content}")
+                self._raise_if_strict(je)
                 return self._get_mock_quote_response(project_data, answers)
 
         except Exception as e:
             logger.error(f"OpenAI API error in quote generation: {str(e)}")
+            self._raise_if_strict(e)
             return self._get_mock_quote_response(project_data, answers)
 
     async def generate_quick_quote(self, service_description: str, area: Optional[str] = None,
@@ -344,26 +420,30 @@ Erstelle einen professionellen Kostenvoranschlag basierend auf der Beschreibung 
 
 {self._build_cost_instructions(hourly_rate, material_cost_markup)}
 
+{self._PLAUSIBILITY_RULES}
+
+{self._MATERIAL_USAGE_RULES}
+
 Das Angebot soll:
 - Realistische Positionen mit Einheiten und Preisen enthalten
 - Materialkosten (Farbe, Grundierung, Abdeckmaterial) separat auflisten
 - Vorarbeiten (Abkleben, Abdecken, Grundierung) berücksichtigen
 - Netto-Zwischensumme und Mehrwertsteuer (19%) separat ausweisen
 - Typische Formulierungen eines deutschen Handwerksbetriebs nutzen
-- Bei fehlenden Flächenangaben realistische Schätzungen verwenden und im Hinweistext darauf hinweisen
+- Bei fehlenden Flächenangaben den Plausibilitätsregeln folgen und Annahmen im 'notes'-Feld benennen
 
 Antworte AUSSCHLIESSLICH im folgenden JSON-Format (kein Markdown, keine Erklärungen drumherum):
-{
+{{
   "project_title": "Kurzer Projekttitel",
   "items": [
-    {"position": 1, "description": "Beschreibung der Position", "quantity": 1.0, "unit": "m²", "unit_price": 10.00, "total_price": 10.00, "category": "labor|material|preparation"}
+    {{"position": 1, "description": "Beschreibung der Position", "quantity": 1.0, "unit": "m²", "unit_price": 10.00, "total_price": 10.00, "category": "labor|material|preparation"}}
   ],
   "subtotal": 0.00,
   "vat_amount": 0.00,
   "total_amount": 0.00,
   "notes": "Hinweise zum Angebot",
   "recommendations": ["Empfehlung 1"]
-}"""
+}}"""
 
             user_input = f"Leistung: {service_description}"
             if area:
@@ -394,11 +474,13 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format (kein Markdown, keine Erkläru
             result = json.loads(content)
             return result
 
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as je:
             logger.error(f"Failed to parse quick quote JSON: {content}")
+            self._raise_if_strict(je)
             return self._get_mock_quick_quote_response(service_description)
         except Exception as e:
             logger.error(f"OpenAI API error in quick quote: {str(e)}")
+            self._raise_if_strict(e)
             return self._get_mock_quick_quote_response(service_description)
 
     def _get_mock_quick_quote_response(self, service_description: str) -> Dict:

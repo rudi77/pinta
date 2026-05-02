@@ -1,0 +1,103 @@
+{
+  "scenario_id": "S2_apartment_renovation",
+  "label": "3-Zi-Wohnung Renovierung mit Vorarbeiten",
+  "elapsed_seconds": 14.5,
+  "analysis": {
+    "analysis": {
+      "project_type": "Wohnungsrenovierung",
+      "estimated_area": null,
+      "complexity": "medium",
+      "missing_info": [
+        "Gesamte Fläche der Wohnung in Quadratmetern",
+        "Höhe der Wände",
+        "Zustand der Wände nach Entfernung der Tapete",
+        "Materialwünsche für Farben oder Tapeten",
+        "Gewünschter Zeitrahmen für die Renovierung",
+        "Zugänglichkeit der Wohnung für die Arbeiten"
+      ]
+    },
+    "questions": [
+      {
+        "id": "q1",
+        "question": "Wie groß ist die gesamte Fläche der Wohnung in Quadratmetern?",
+        "type": "number"
+      },
+      {
+        "id": "q2",
+        "question": "Wie hoch sind die Wände in den verschiedenen Räumen?",
+        "type": "number"
+      },
+      {
+        "id": "q3",
+        "question": "Welche Art von Farbe oder Tapete wünschen Sie für die Wände?",
+        "type": "text"
+      },
+      {
+        "id": "q4",
+        "question": "In welchem Zeitrahmen möchten Sie die Renovierung abgeschlossen haben?",
+        "type": "text"
+      },
+      {
+        "id": "q5",
+        "question": "Wie gut ist die Zugänglichkeit der Wohnung für die Renovierungsarbeiten?",
+        "type": "text"
+      }
+    ],
+    "suggestions": [
+      "Es könnte hilfreich sein, eine Skizze oder einen Grundriss der Wohnung bereitzustellen.",
+      "Überlegen Sie, ob Sie Reparaturen an den Rissen und dem Wasserfleck wünschen, bevor die Renovierung beginnt.",
+      "Informieren Sie sich über verschiedene Materialien, da die Auswahl die Kosten und das Endergebnis beeinflussen kann."
+    ]
+  },
+  "quote": {
+    "quote": {
+      "project_title": "Renovierung 3-Zimmer-Wohnung",
+      "subtotal": 3465.0,
+      "vat_amount": 658.35,
+      "total_amount": 4123.35,
+      "labor_hours": 60,
+      "hourly_rate": 55,
+      "material_cost": 1500.0,
+      "additional_costs": 0
+    },
+    "items": [
+      {
+        "description": "Arbeitszeit für Renovierung (60 Stunden à 55 EUR)",
+        "quantity": 60,
+        "unit": "h",
+        "unit_price": 55,
+        "total_price": 3300,
+        "category": "labor"
+      },
+      {
+        "description": "Premium-Allergiker-Dispersionfarbe (10 L für 175 m², 2 Anstriche)",
+        "quantity": 10,
+        "unit": "L",
+        "unit_price": 50,
+        "total_price": 500,
+        "category": "material"
+      },
+      {
+        "description": "Isoliergrundierung (5 L für Wasserfleck)",
+        "quantity": 5,
+        "unit": "L",
+        "unit_price": 30,
+        "total_price": 150,
+        "category": "material"
+      },
+      {
+        "description": "Spachtelmasse für Risse (10 kg für 175 m Wandfläche)",
+        "quantity": 10,
+        "unit": "kg",
+        "unit_price": 5,
+        "total_price": 50,
+        "category": "material"
+      }
+    ],
+    "notes": "Die Wandfläche wurde aus der Wohnfläche abgeleitet, Deckenfläche ist ebenfalls berücksichtigt. Premiumfarbe wurde für Allergiker gewählt. Risse werden gespachtelt und der Wasserfleck mit Isoliergrund behandelt. Zugänglichkeit ist gut, daher keine zusätzlichen Kosten für Gerüst oder schwer zugängliche Bereiche.",
+    "recommendations": [
+      "Vor Beginn der Arbeiten sollte die Wohnung auf mögliche weitere Schäden überprüft werden.",
+      "Es wird empfohlen, während der Arbeiten gut zu lüften, um die Trocknungszeit der Farben zu optimieren."
+    ]
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "scenario_id": "S1_simple_room",
+  "label": "Einzelnes Schlafzimmer streichen",
+  "elapsed_seconds": 5.14,
+  "result": {
+    "project_title": "Schlafzimmer Streichen",
+    "items": [
+      {
+        "position": 1,
+        "description": "Streichen der Wände und Decke (inkl. Vorarbeiten)",
+        "quantity": 34.2,
+        "unit": "m²",
+        "unit_price": 12.0,
+        "total_price": 410.4,
+        "category": "labor"
+      },
+      {
+        "position": 2,
+        "description": "Abdecken des Bodens",
+        "quantity": 1.0,
+        "unit": "pauschal",
+        "unit_price": 50.0,
+        "total_price": 50.0,
+        "category": "preparation"
+      },
+      {
+        "position": 3,
+        "description": "Dispersionsfarbe (2 Anstriche)",
+        "quantity": 10.0,
+        "unit": "l",
+        "unit_price": 12.0,
+        "total_price": 120.0,
+        "category": "material"
+      },
+      {
+        "position": 4,
+        "description": "Tiefgrund für die Wände",
+        "quantity": 2.0,
+        "unit": "l",
+        "unit_price": 8.0,
+        "total_price": 16.0,
+        "category": "material"
+      }
+    ],
+    "subtotal": 596.4,
+    "vat_amount": 113.32,
+    "total_amount": 709.72,
+    "notes": "Die Fläche wurde auf Basis der Raummaße und der Faustregel für Streichflächen berechnet. Möbel werden vom Kunden ausgeräumt, daher keine zusätzlichen Kosten für Möbelrücken.",
+    "recommendations": [
+      "Für eine optimale Haftung der neuen Farbe empfehlen wir die Verwendung von Tiefgrund."
+    ]
+  }
+}
