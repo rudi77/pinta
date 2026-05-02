@@ -72,6 +72,11 @@ def register_pinta_tools() -> None:
             "type": "SearchMaterialsTool",
             "module": "src.agents.tools.search_materials",
         },
+        {
+            "name": "generate_quote_pdf",
+            "type": "GenerateQuotePdfTool",
+            "module": "src.agents.tools.generate_quote_pdf",
+        },
     ]
     for spec in pinta_tools:
         if spec["name"] in _TOOL_REGISTRY:
@@ -122,10 +127,13 @@ async def create_maler_agent(*, tools: Optional[list[str]] = None) -> Any:
     factory = _get_factory()
     cfg = _load_config()
 
-    # Iter 5: python (math) + search_materials (RAG over MaterialPrice DB).
-    # search_materials returns an empty list when the DB isn't seeded yet, so
-    # it's safe to enable always — the agent falls back to its faustregeln.
-    tool_list = tools if tools is not None else ["python", "search_materials"]
+    # Iter 6: python (math) + search_materials (RAG) + generate_quote_pdf
+    # (rendert den Quote als A4-PDF; Telegram-Runner versendet die Datei
+    # automatisch als Download, wenn das Tool erfolgreich gelaufen ist).
+    tool_list = (
+        tools if tools is not None
+        else ["python", "search_materials", "generate_quote_pdf"]
+    )
 
     WORK_DIR.mkdir(parents=True, exist_ok=True)
 

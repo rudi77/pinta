@@ -22,14 +22,110 @@ once the HTTP backend should run alongside the bot.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
+import re
 from typing import Any
+
+from pathlib import Path
 
 from src.agents.factory import create_maler_agent, warm_factory
 from src.agents.taskforce_setup import ensure_litellm_env_for_taskforce
 from src.core.settings import settings
 from src.telegram.state import get_session_for_chat, reset_session_for_chat
+
+# Where the generate_quote_pdf tool writes finished PDFs.
+_QUOTES_DIR = (
+    Path(__file__).resolve().parents[2] / ".taskforce_maler" / "quotes"
+)
+
+
+def _snapshot_pdfs() -> set[Path]:
+    if not _QUOTES_DIR.exists():
+        return set()
+    return {p for p in _QUOTES_DIR.glob("*.pdf") if p.is_file()}
+
+
+def _newest(paths: set[Path]) -> Path | None:
+    if not paths:
+        return None
+    return max(paths, key=lambda p: p.stat().st_mtime)
+
+
+def _humanize_reply(raw: str) -> str:
+    """Strip raw JSON / code fences and return a Maler-friendly summary.
+
+    The agent is instructed (in maler.yaml) to write a short German summary
+    only — no JSON, no code blocks. This is a defensive net for runs where
+    the LLM still leaks the internal quote envelope into the chat.
+    """
+    if not raw or not raw.strip():
+        return raw
+
+    text = raw.strip()
+
+    # Find a balanced JSON object that looks like a quote envelope.
+    # Try greedy first (outermost {...}) so nested item dicts don't shadow
+    # the wrapper, then fall back to non-greedy if the outermost match
+    # isn't valid JSON (e.g. mid-message braces).
+    quote = None
+    for pattern in (r"\{[\s\S]*\}", r"\{[\s\S]*?\}"):
+        for match in re.finditer(pattern, text):
+            snippet = match.group(0)
+            try:
+                obj = json.loads(snippet)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(obj, dict) and (
+                "items" in obj or "total_amount" in obj or "subtotal" in obj
+            ):
+                quote = obj
+                break
+        if quote:
+            break
+
+    # Strip all fenced code blocks (```...```).
+    cleaned = re.sub(r"```[\s\S]*?```", "", text).strip()
+    # Strip any standalone JSON-looking braces blocks (top-level only).
+    cleaned = re.sub(
+        r"^\s*\{[\s\S]*?\}\s*$", "", cleaned, flags=re.MULTILINE
+    ).strip()
+
+    if quote:
+        title = quote.get("project_title") or "Kostenvoranschlag"
+        sub = quote.get("subtotal")
+        vat = quote.get("vat_amount")
+        total = quote.get("total_amount")
+
+        def _fmt(v):
+            try:
+                return f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            except (TypeError, ValueError):
+                return "—"
+
+        summary_lines = [title]
+        if sub is not None and vat is not None and total is not None:
+            summary_lines.append(
+                f"Netto: {_fmt(sub)} EUR · MwSt 19%: {_fmt(vat)} EUR · "
+                f"Brutto: {_fmt(total)} EUR"
+            )
+        notes = (quote.get("notes") or "").strip()
+        if notes:
+            short = notes.split(".")[0].strip()
+            if short:
+                summary_lines.append(short + ".")
+        summary_lines.append("📄 PDF kommt gleich als Download.")
+
+        # If the model wrote a useful prose preamble alongside the JSON,
+        # keep that — but only if it doesn't contain raw JSON itself.
+        if cleaned and "{" not in cleaned and "}" not in cleaned and len(cleaned) < 600:
+            return cleaned + "\n\n" + "\n".join(summary_lines)
+        return "\n".join(summary_lines)
+
+    # No quote JSON detected — just return the cleaned prose, falling back
+    # to the original if cleaning ate everything.
+    return cleaned or raw
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +162,10 @@ def _make_inbound_handler(outbound_sender: Any):
     ) -> None:
         chat_id_int = int(chat_id) if chat_id.lstrip("-").isdigit() else 0
 
-        # Built-in commands
+        # Built-in commands (lowercase aliases)
         stripped = text.strip()
-        if stripped.lower() in {"/neu", "/start"}:
+        cmd = stripped.lower().split()[0] if stripped else ""
+        if cmd in {"/neu", "/new", "/start", "/reset"}:
             reset_session_for_chat(chat_id_int)
             await outbound_sender.send(
                 recipient_id=chat_id,
@@ -109,11 +206,56 @@ def _make_inbound_handler(outbound_sender: Any):
                 message="✏️ Moment, ich rechne...",
             )
 
-            result = await agent.execute(
+            # Snapshot existing PDFs so we can detect new ones the agent
+            # generated during this mission, regardless of whether the path
+            # propagated up through the stream.
+            pdfs_before = _snapshot_pdfs()
+
+            # Stream the run so we can intercept generate_quote_pdf's tool_result
+            # and ship the PDF as a Telegram attachment afterwards.
+            final_message = ""
+            pdf_path: str | None = None
+
+            async for event in agent.execute_stream(
                 mission=mission,
                 session_id=f"tg-{chat_id}",
-            )
-            reply = result.final_message or ""
+            ):
+                etype = (
+                    event.event_type.value
+                    if hasattr(event.event_type, "value")
+                    else str(event.event_type)
+                )
+                if etype == "tool_result":
+                    found = _extract_pdf_path(event.data)
+                    if found:
+                        pdf_path = found
+                elif etype == "final_answer":
+                    final_message = (
+                        event.data.get("content")
+                        or event.data.get("final_message")
+                        or final_message
+                    )
+                elif etype == "complete":
+                    final_message = event.data.get("final_message") or final_message
+                elif etype == "error":
+                    err = event.data.get("message") or event.data.get("error")
+                    logger.warning("telegram.agent_error %s", err)
+
+            # Filesystem fallback: if the stream-side detection missed it
+            # (event shape variations across pytaskforce versions, python-
+            # bridge wrapping, etc.) but a new PDF appeared in the quotes
+            # directory during this run, send the newest one.
+            if not pdf_path:
+                new_pdfs = _snapshot_pdfs() - pdfs_before
+                newest = _newest(new_pdfs)
+                if newest:
+                    pdf_path = str(newest)
+                    logger.info(
+                        "telegram.pdf_via_fs_fallback chat=%s path=%s",
+                        chat_id, pdf_path,
+                    )
+
+            reply = _humanize_reply(final_message or "")
             if not reply.strip():
                 reply = (
                     "Ich konnte die Anfrage gerade nicht beantworten. "
@@ -122,6 +264,38 @@ def _make_inbound_handler(outbound_sender: Any):
             # Telegram message limit is 4096 chars — chunk if needed
             for chunk in _chunk(reply, 3800):
                 await outbound_sender.send(recipient_id=chat_id, message=chunk)
+
+            # If the agent generated a PDF, ship it as a downloadable document.
+            if pdf_path:
+                try:
+                    await outbound_sender.send_file(
+                        recipient_id=chat_id,
+                        file_path=pdf_path,
+                        attachment_type="document",
+                        caption="📄 Kostenvoranschlag als PDF",
+                    )
+                    logger.info(
+                        "telegram.pdf_sent chat=%s path=%s", chat_id, pdf_path,
+                    )
+                except FileNotFoundError:
+                    logger.warning("telegram.pdf_missing path=%s", pdf_path)
+                    await outbound_sender.send(
+                        recipient_id=chat_id,
+                        message=(
+                            "(Hinweis: Das PDF konnte ich gerade nicht anhängen — "
+                            "der Agent hat den Pfad zwar gemeldet, die Datei ist "
+                            "aber nicht da.)"
+                        ),
+                    )
+                except Exception as exc:
+                    logger.exception("telegram.send_file_failed")
+                    await outbound_sender.send(
+                        recipient_id=chat_id,
+                        message=(
+                            "(Hinweis: PDF-Versand fehlgeschlagen: "
+                            f"{type(exc).__name__})."
+                        ),
+                    )
         except Exception as exc:  # pragma: no cover — surfaced to user
             logger.exception("telegram.mission_failed")
             try:
@@ -141,6 +315,47 @@ def _make_inbound_handler(outbound_sender: Any):
                 pass
 
     return handle
+
+
+def _extract_pdf_path(event_data: dict) -> str | None:
+    """Pull a generate_quote_pdf file_path out of any tool_result payload.
+
+    Scans the dict tree recursively: the agent often calls the PDF tool via
+    the python-bridge (``tool_generate_quote_pdf(...)``), in which case the
+    stream event arrives as ``tool=python`` with the real PDF result nested
+    one level deeper under ``result.result``. Filtering on tool_name would
+    miss that — instead we just look for any ``{success: true, file_path:
+    "*.pdf"}`` shape anywhere in the payload.
+    """
+    if not isinstance(event_data, dict):
+        return None
+
+    seen: set[int] = set()
+
+    def _walk(node):
+        if isinstance(node, dict):
+            if id(node) in seen:
+                return None
+            seen.add(id(node))
+            fp = node.get("file_path")
+            if (
+                node.get("success") is True
+                and isinstance(fp, str)
+                and fp.lower().endswith(".pdf")
+            ):
+                return fp
+            for v in node.values():
+                hit = _walk(v)
+                if hit:
+                    return hit
+        elif isinstance(node, list):
+            for item in node:
+                hit = _walk(item)
+                if hit:
+                    return hit
+        return None
+
+    return _walk(event_data)
 
 
 def _chunk(text: str, n: int) -> list[str]:
