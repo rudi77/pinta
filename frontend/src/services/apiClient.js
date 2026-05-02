@@ -201,7 +201,7 @@ class ApiClient {
 
   // AI Analysis
   async analyzeInput(input) {
-    const response = await this.request('/ai/analyze-input', {
+    const response = await this.request('/ai/analyze-project', {
       method: 'POST',
       body: JSON.stringify({ input }),
     });

@@ -7,6 +7,7 @@ asyncpg==0.29.0
 alembic==1.14.0
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 python-multipart==0.0.20
 openai==1.58.1
 python-dotenv==1.0.1
@@ -42,4 +43,9 @@ opencv-python-headless==4.10.0.84
 # For better file handling
 python-magic-bin==0.4.14; platform_system=="Windows"
 python-magic==0.4.27; platform_system!="Windows"
+
+# Maler-Agent (pytaskforce) — nicht auf PyPI; via Git installieren.
+# Für lokale Dev an pytaskforce zeitgleich: `uv add --editable <pfad>` (nicht hier pinnen).
+# taskforce @ git+https://github.com/rudi77/pytaskforce
+# python-telegram-bot>=21.0
 

@@ -7,7 +7,10 @@
       "Bash(powershell:*)",
       "Bash(move teststest_document_processing.py testsold)",
       "Bash(python:*)",
-      "Bash(uv pip install:*)"
+      "Bash(uv pip install:*)",
+      "Bash(docker exec *)",
+      "Bash(docker restart *)",
+      "Bash(gh repo *)"
     ],
     "deny": [],
     "ask": [],

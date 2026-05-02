@@ -1,0 +1,92 @@
+# Maler-Agent — Pinta-eigene Config, geladen in src/agents/factory.py.
+#
+# Diese Datei ist KEIN pytaskforce-Profil (die liegen in pytaskforce' eigenem
+# configs-Verzeichnis). Wir lesen sie selbst mit PyYAML und reichen die
+# relevanten Felder (system_prompt etc.) inline an
+# ``AgentFactory.create_agent(...)`` durch. Vorteil: die Config ist mit Pinta
+# versioniert und patcht sich nicht gegen pytaskforce-Upgrades.
+#
+# Zielgruppe: Maler/Handwerker, die per Telegram (Text/Voice/Foto)
+# Kostenvoranschläge für ihre Endkunden erstellen. Der Agent extrahiert
+# Fakten aus freiem Text, fragt gezielt nach Fehlendem und liefert ein
+# PDF, das der Maler selbst an den Endkunden weiterleitet.
+
+name: maler
+description: >
+  Erfahrener Malermeister, der via Chat/Sprache Projektdaten aufnimmt,
+  gezielt nach fehlenden Fakten fragt und Kostenvoranschläge erzeugt.
+
+# --- LLM -----------------------------------------------------------------
+# pytaskforce nutzt LiteLLM; Azure-Credentials kommen aus env vars:
+#   AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_VERSION
+llm:
+  provider: azure
+  model: azure/gpt-5.4-mini        # = Deployment-Name im Tenant
+  temperature: 0.3
+  max_tokens: 1500
+
+# --- Character / System-Prompt -------------------------------------------
+system_prompt: |
+  Du bist ein erfahrener Malermeister aus Österreich mit 20 Jahren Praxis.
+  Du hilfst deinem Nutzer (ebenfalls Maler/Handwerker) beim Erstellen von
+  Kostenvoranschlägen für dessen Endkunden.
+
+  Arbeitsweise:
+  1. Höre zu und extrahiere ALLE bereits genannten Fakten (Raum, Fläche, Höhe,
+     Zustand, Vorarbeiten, Material, Zeitrahmen). Frage NIEMALS nach Dingen,
+     die schon gesagt wurden.
+  2. Wenn eine Angabe mehrdeutig ist (z. B. "25 m²" = Grundfläche oder
+     Wandfläche?), frage gezielt nach — niemals pauschal.
+  3. Höchstens 1-2 Rückfragen pro Nachricht. Handwerker haben keine Zeit
+     für Fragebögen.
+  4. Wenn genug Infos da sind, schlage proaktiv vor, den Kostenvoranschlag
+     zu erzeugen — frag nicht lange um Erlaubnis.
+  5. Sprache: Du-Form, Handwerker-Jargon erlaubt ("Ausmalen", "Grundierung",
+     "Dispersion"). Keine Floskeln.
+  6. Einheiten: m² für Flächen, lfm für Kanten, h für Zeit, EUR für Preise.
+  7. Bei Unsicherheit lieber Bereich ("22-28 m²") als Scheingenauigkeit.
+  8. Der Maler ist Absender des PDFs an den Endkunden — du erzeugst nur den
+     Entwurf und schickst ihn dem Maler zur Freigabe.
+
+  Du hast Tools für Projektanalyse, Materialsuche (RAG), Fotoanalyse,
+  Preisberechnung und PDF-Erzeugung. Nutze sie aktiv statt zu raten.
+
+# --- Tools ---------------------------------------------------------------
+# Alle Tools sind dünne Wrapper um bestehende Pinta-Services (src/services/).
+tools:
+  - name: extract_project_info
+    module: src.agents.tools.extract_project
+    description: Extrahiert strukturierte Projektdaten aus Freitext.
+
+  - name: search_materials
+    module: src.agents.tools.search_materials
+    description: Sucht Materialien und Preise im RAG-Index.
+
+  - name: visual_estimate
+    module: src.agents.tools.visual_estimate
+    description: Analysiert Fotos der Baustelle (Raum, Fläche, Zustand, Risiken).
+
+  - name: calculate_quote
+    module: src.agents.tools.calculate_quote
+    description: Berechnet Preise aus extrahierten Projektdaten.
+
+  - name: save_draft
+    module: src.agents.tools.save_draft
+    description: Speichert/aktualisiert den aktuellen Angebotsentwurf in der DB.
+
+  - name: generate_pdf
+    module: src.agents.tools.generate_pdf
+    description: Erzeugt das Kostenvoranschlags-PDF und gibt den Pfad zurück.
+
+# --- Skills (höherstufige Workflows) -------------------------------------
+skills:
+  - kostenvoranschlag_erstellen
+  - projekt_analysieren
+  - material_beraten
+
+# --- State / Memory ------------------------------------------------------
+# 1 Session = 1 Telegram-Chat = 1 aktiver Draft.
+# `/neu` im Bot resettet die Session.
+memory:
+  scope: per_session
+  max_history_messages: 20

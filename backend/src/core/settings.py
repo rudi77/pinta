@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     # Separate Vision-capable model for multi-modal photo analysis (Premium feature)
     openai_vision_model: str = "gpt-4o"
+
+    # Azure OpenAI (used by pytaskforce via LiteLLM; env vars prefixed AZURE_OPENAI_*)
+    azure_openai_api_key: str = ""
+    azure_openai_endpoint: str = ""
+    azure_openai_api_version: str = "2024-10-21"
+    azure_openai_deployment: str = "gpt-5.4-mini"
+
+    # Telegram bot (Maler-Agent Messenger Interface)
+    telegram_bot_token: str = ""
     # Embedding model for RAG material search
     openai_embedding_model: str = "text-embedding-3-small"
     # Embedding dimension (must match the model; 1536 for text-embedding-3-small)
