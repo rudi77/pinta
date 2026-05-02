@@ -39,6 +39,7 @@ WORK_DIR = Path(__file__).resolve().parents[2] / ".taskforce_maler"
 
 _factory: Optional[Any] = None  # AgentFactory singleton
 _config_cache: Optional[dict] = None
+_tools_registered: bool = False
 
 
 def _load_config() -> dict:
@@ -47,6 +48,40 @@ def _load_config() -> dict:
         with MALER_CONFIG.open(encoding="utf-8") as f:
             _config_cache = yaml.safe_load(f)
     return _config_cache
+
+
+def register_pinta_tools() -> None:
+    """Register Pinta-specific tools in pytaskforce' global tool registry.
+
+    Idempotent — safe to call multiple times.
+    MUST run before the first ``create_agent`` call so the OpenAI tool schema
+    includes them (LeanAgent freezes the tool schema at construction time).
+    """
+    global _tools_registered
+    if _tools_registered:
+        return
+
+    from taskforce.infrastructure.tools.registry import (  # noqa: WPS433
+        _TOOL_REGISTRY,
+        register_tool,
+    )
+
+    pinta_tools = [
+        {
+            "name": "search_materials",
+            "type": "SearchMaterialsTool",
+            "module": "src.agents.tools.search_materials",
+        },
+    ]
+    for spec in pinta_tools:
+        if spec["name"] in _TOOL_REGISTRY:
+            continue  # Already registered — module reload or repeat call
+        register_tool(
+            name=spec["name"],
+            tool_type=spec["type"],
+            module=spec["module"],
+        )
+    _tools_registered = True
 
 
 def warm_factory() -> Any:
@@ -60,6 +95,7 @@ def warm_factory() -> Any:
         return _factory
 
     ensure_litellm_env_for_taskforce(strict=True)
+    register_pinta_tools()
     from taskforce.application.factory import AgentFactory  # noqa: WPS433
 
     _factory = AgentFactory()
@@ -86,10 +122,10 @@ async def create_maler_agent(*, tools: Optional[list[str]] = None) -> Any:
     factory = _get_factory()
     cfg = _load_config()
 
-    # Iter 4 starts with python only — domain knowledge stays in the system
-    # prompt, calculations go through the python tool. The other tool stubs
-    # in src/agents/tools/ get wired up incrementally.
-    tool_list = tools if tools is not None else ["python"]
+    # Iter 5: python (math) + search_materials (RAG over MaterialPrice DB).
+    # search_materials returns an empty list when the DB isn't seeded yet, so
+    # it's safe to enable always — the agent falls back to its faustregeln.
+    tool_list = tools if tools is not None else ["python", "search_materials"]
 
     WORK_DIR.mkdir(parents=True, exist_ok=True)
 

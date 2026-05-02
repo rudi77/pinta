@@ -1,0 +1,96 @@
+{
+  "scenario_id": "S2_apartment_renovation",
+  "label": "3-Zi-Wohnung Renovierung mit Vorarbeiten",
+  "elapsed_seconds": 44.5,
+  "status": "ExecutionStatus.COMPLETED",
+  "token_usage": {
+    "prompt": 32748,
+    "completion": 5441,
+    "total": 38189
+  },
+  "final_message": "{\n  \"project_title\": \"Komplette Renovierung 3-Zimmer-Wohnung inkl. Wände, Decken, Risssanierung, Wasserfleck-Isolierung und Heizkörperlackierung\",\n  \"items\": [\n    {\n      \"description\": \"Abdecken, Abkleben und vorbereitende Baustelleneinrichtung\",\n      \"quantity\": 16.0,\n      \"unit\": \"h\",\n      \"unit_price\": 55.0,\n      \"category\": \"labor\"\n    },\n    {\n      \"description\": \"Risse aus alter Tapete lokal spachteln und ausbessern\",\n      \"quantity\": 12.0,\n      \"unit\": \"h\",\n      \"unit_price\": 55.0,\n      \"category\": \"preparation\"\n    },\n    {\n      \"description\": \"Wasserfleck mit Isoliergrund behandeln\",\n      \"quantity\": 2.0,\n      \"unit\": \"h\",\n      \"unit_price\": 55.0,\n      \"category\": \"preparation\"\n    },\n    {\n      \"description\": \"Wände und Decken 2x mit Premium-Allergiker-Dispersion weiß matt streichen\",\n      \"quantity\": 52.2,\n      \"unit\": \"h\",\n      \"unit_price\": 55.0,\n      \"category\": \"labor\"\n    },\n    {\n      \"description\": \"Heizkörper (5 Stk.) anschleifen, lackieren und nacharbeiten\",\n      \"quantity\": 10.0,\n      \"unit\": \"h\",\n      \"unit_price\": 55.0,\n      \"category\": \"labor\"\n    },\n    {\n      \"description\": \"Feinreinigung, Endkontrolle und kleine Nacharbeiten\",\n      \"quantity\": 4.0,\n      \"unit\": \"h\",\n      \"unit_price\": 55.0,\n      \"category\": \"labor\"\n    },\n    {\n      \"description\": \"Premium-Allergiker-Dispersion weiß matt\",\n      \"quantity\": 80.0,\n      \"unit\": \"L\",\n      \"unit_price\": 12.9,\n      \"category\": \"material\"\n    },\n    {\n      \"description\": \"Isoliergrund für Wasserfleck\",\n      \"quantity\": 1.0,\n      \"unit\": \"L\",\n      \"unit_price\": 18.5,\n      \"category\": \"material\"\n    },\n    {\n      \"description\": \"Spachtelmasse für Risssanierung\",\n      \"quantity\": 15.0,\n      \"unit\": \"kg\",\n      \"unit_price\": 2.8,\n      \"category\": \"material\"\n    },\n    {\n      \"description\": \"Heizkörperlack weiß hitzebeständig\",\n      \"quantity\": 3.0,\n      \"unit\": \"L\",\n      \"unit_price\": 19.9,\n      \"category\": \"material\"\n    }\n  ],\n  \"subtotal\": 6443.2,\n  \"vat_amount\": 1224.21,\n  \"total_amount\": 7667.41,\n  \"notes\": \"Annahmen: Die Streichfläche von ca. 240 m² umfasst Wände und Decken in 2 Anstrichen. Der Wasserfleck wird als lokal und nicht aktiv eingeschätzt; daher nur punktuelle Isolierung. Risse aus alter Tapete werden lokal gespachtelt, Türen und Fenster sind ausgespart. Die Wohnung ist leerstehend und gut zugänglich, daher wurde mit normalen Innenraum-Leistungswerten kalkuliert. Materialpreise sind marktübliche Richtwerte, da die Materialdatenbank keine Treffer geliefert hat.\",\n  \"recommendations\": [\n    \"Vor Start den Wasserfleck kurz auf Restfeuchte prüfen.\",\n    \"Bei tieferen Rissen oder losem Altputz die Risssanierung ggf. erweitern.\",\n    \"Heizkörperlackierung nur bei ausreichend Abkühlung und mit sauberer Abkleidung ausführen.\"\n  ]\n}",
+  "quote_extracted": {
+    "project_title": "Komplette Renovierung 3-Zimmer-Wohnung inkl. Wände, Decken, Risssanierung, Wasserfleck-Isolierung und Heizkörperlackierung",
+    "items": [
+      {
+        "description": "Abdecken, Abkleben und vorbereitende Baustelleneinrichtung",
+        "quantity": 16.0,
+        "unit": "h",
+        "unit_price": 55.0,
+        "category": "labor"
+      },
+      {
+        "description": "Risse aus alter Tapete lokal spachteln und ausbessern",
+        "quantity": 12.0,
+        "unit": "h",
+        "unit_price": 55.0,
+        "category": "preparation"
+      },
+      {
+        "description": "Wasserfleck mit Isoliergrund behandeln",
+        "quantity": 2.0,
+        "unit": "h",
+        "unit_price": 55.0,
+        "category": "preparation"
+      },
+      {
+        "description": "Wände und Decken 2x mit Premium-Allergiker-Dispersion weiß matt streichen",
+        "quantity": 52.2,
+        "unit": "h",
+        "unit_price": 55.0,
+        "category": "labor"
+      },
+      {
+        "description": "Heizkörper (5 Stk.) anschleifen, lackieren und nacharbeiten",
+        "quantity": 10.0,
+        "unit": "h",
+        "unit_price": 55.0,
+        "category": "labor"
+      },
+      {
+        "description": "Feinreinigung, Endkontrolle und kleine Nacharbeiten",
+        "quantity": 4.0,
+        "unit": "h",
+        "unit_price": 55.0,
+        "category": "labor"
+      },
+      {
+        "description": "Premium-Allergiker-Dispersion weiß matt",
+        "quantity": 80.0,
+        "unit": "L",
+        "unit_price": 12.9,
+        "category": "material"
+      },
+      {
+        "description": "Isoliergrund für Wasserfleck",
+        "quantity": 1.0,
+        "unit": "L",
+        "unit_price": 18.5,
+        "category": "material"
+      },
+      {
+        "description": "Spachtelmasse für Risssanierung",
+        "quantity": 15.0,
+        "unit": "kg",
+        "unit_price": 2.8,
+        "category": "material"
+      },
+      {
+        "description": "Heizkörperlack weiß hitzebeständig",
+        "quantity": 3.0,
+        "unit": "L",
+        "unit_price": 19.9,
+        "category": "material"
+      }
+    ],
+    "subtotal": 6443.2,
+    "vat_amount": 1224.21,
+    "total_amount": 7667.41,
+    "notes": "Annahmen: Die Streichfläche von ca. 240 m² umfasst Wände und Decken in 2 Anstrichen. Der Wasserfleck wird als lokal und nicht aktiv eingeschätzt; daher nur punktuelle Isolierung. Risse aus alter Tapete werden lokal gespachtelt, Türen und Fenster sind ausgespart. Die Wohnung ist leerstehend und gut zugänglich, daher wurde mit normalen Innenraum-Leistungswerten kalkuliert. Materialpreise sind marktübliche Richtwerte, da die Materialdatenbank keine Treffer geliefert hat.",
+    "recommendations": [
+      "Vor Start den Wasserfleck kurz auf Restfeuchte prüfen.",
+      "Bei tieferen Rissen oder losem Altputz die Risssanierung ggf. erweitern.",
+      "Heizkörperlackierung nur bei ausreichend Abkühlung und mit sauberer Abkleidung ausführen."
+    ]
+  }
+}

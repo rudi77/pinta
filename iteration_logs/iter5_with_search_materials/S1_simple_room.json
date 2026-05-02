@@ -1,0 +1,60 @@
+{
+  "scenario_id": "S1_simple_room",
+  "label": "Einzelnes Schlafzimmer streichen",
+  "elapsed_seconds": 33.76,
+  "status": "ExecutionStatus.COMPLETED",
+  "token_usage": {
+    "prompt": 9506,
+    "completion": 4243,
+    "total": 13749
+  },
+  "final_message": "{\n  \"project_title\": \"Schlafzimmer komplett streichen (Wände und Decke)\",\n  \"items\": [\n    {\n      \"description\": \"Boden, Sockel, Fenster und Tür abdecken/abkleben\",\n      \"quantity\": 3,\n      \"unit\": \"h\",\n      \"unit_price\": 55,\n      \"category\": \"preparation\"\n    },\n    {\n      \"description\": \"Leichte Vorarbeiten: kleine Ausbesserungen, Anschliff, Untergrundvorbereitung\",\n      \"quantity\": 3,\n      \"unit\": \"h\",\n      \"unit_price\": 55,\n      \"category\": \"preparation\"\n    },\n    {\n      \"description\": \"Wände und Decke weiß streichen, 2 Anstriche\",\n      \"quantity\": 18,\n      \"unit\": \"h\",\n      \"unit_price\": 55,\n      \"category\": \"labor\"\n    },\n    {\n      \"description\": \"Standard-Dispersionsfarbe weiß\",\n      \"quantity\": 20,\n      \"unit\": \"L\",\n      \"unit_price\": 7.2,\n      \"category\": \"material\"\n    },\n    {\n      \"description\": \"Abdeckfolie, Klebeband, Kleinmaterial\",\n      \"quantity\": 1,\n      \"unit\": \"pauschal\",\n      \"unit_price\": 35,\n      \"category\": \"additional\"\n    }\n  ],\n  \"subtotal\": 1499.0,\n  \"vat_amount\": 284.81,\n  \"total_amount\": 1783.81,\n  \"notes\": \"Annahmen: Raumgröße 4,2 x 3,5 m, Deckenhöhe 2,55 m, Streichfläche ca. 53,7 m². Möbel sind bereits ausgeräumt. Bodenabdeckung und Abkleben sind enthalten. Für die Kalkulation wurden 2 Anstriche mit weißer Standard-Dispersionsfarbe angesetzt; kein spezieller Sperrgrund oder starke Spachtelarbeiten einkalkuliert.\",\n  \"recommendations\": [\n    \"Bei stärkerem Gelbstich oder Fleckenbildung sollte zusätzlich ein Isolier-/Sperrgrund eingeplant werden.\",\n    \"Wenn der Untergrund mehr Ausbesserungen braucht als angenommen, kann der Preis um ca. 10–15 % steigen.\"\n  ]\n}",
+  "quote_extracted": {
+    "project_title": "Schlafzimmer komplett streichen (Wände und Decke)",
+    "items": [
+      {
+        "description": "Boden, Sockel, Fenster und Tür abdecken/abkleben",
+        "quantity": 3,
+        "unit": "h",
+        "unit_price": 55,
+        "category": "preparation"
+      },
+      {
+        "description": "Leichte Vorarbeiten: kleine Ausbesserungen, Anschliff, Untergrundvorbereitung",
+        "quantity": 3,
+        "unit": "h",
+        "unit_price": 55,
+        "category": "preparation"
+      },
+      {
+        "description": "Wände und Decke weiß streichen, 2 Anstriche",
+        "quantity": 18,
+        "unit": "h",
+        "unit_price": 55,
+        "category": "labor"
+      },
+      {
+        "description": "Standard-Dispersionsfarbe weiß",
+        "quantity": 20,
+        "unit": "L",
+        "unit_price": 7.2,
+        "category": "material"
+      },
+      {
+        "description": "Abdeckfolie, Klebeband, Kleinmaterial",
+        "quantity": 1,
+        "unit": "pauschal",
+        "unit_price": 35,
+        "category": "additional"
+      }
+    ],
+    "subtotal": 1499.0,
+    "vat_amount": 284.81,
+    "total_amount": 1783.81,
+    "notes": "Annahmen: Raumgröße 4,2 x 3,5 m, Deckenhöhe 2,55 m, Streichfläche ca. 53,7 m². Möbel sind bereits ausgeräumt. Bodenabdeckung und Abkleben sind enthalten. Für die Kalkulation wurden 2 Anstriche mit weißer Standard-Dispersionsfarbe angesetzt; kein spezieller Sperrgrund oder starke Spachtelarbeiten einkalkuliert.",
+    "recommendations": [
+      "Bei stärkerem Gelbstich oder Fleckenbildung sollte zusätzlich ein Isolier-/Sperrgrund eingeplant werden.",
+      "Wenn der Untergrund mehr Ausbesserungen braucht als angenommen, kann der Preis um ca. 10–15 % steigen."
+    ]
+  }
+}

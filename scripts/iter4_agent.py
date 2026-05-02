@@ -110,9 +110,13 @@ async def run_scenario(scenario: dict) -> dict:
     agent = await create_maler_agent()
     t0 = time.perf_counter()
     try:
+        # Unique session per run — pytaskforce caches state by session_id and
+        # re-running with the same id replays a stale "already-solved" answer
+        # (or a stale failure from a previous code state).
+        run_id = int(time.time())
         result = await agent.execute(
             mission=scenario["mission"],
-            session_id=f"iter4-{scenario['id']}",
+            session_id=f"iter4-{scenario['id']}-{run_id}",
         )
     finally:
         try:
