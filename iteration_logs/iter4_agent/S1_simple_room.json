@@ -1,0 +1,60 @@
+{
+  "scenario_id": "S1_simple_room",
+  "label": "Einzelnes Schlafzimmer streichen",
+  "elapsed_seconds": 21.68,
+  "status": "ExecutionStatus.COMPLETED",
+  "token_usage": {
+    "prompt": 5511,
+    "completion": 2961,
+    "total": 8472
+  },
+  "final_message": "{\n  \"project_title\": \"Schlafzimmer komplett streichen (Wände und Decke)\",\n  \"items\": [\n    {\n      \"description\": \"Abdecken von Laminat, Fenster/Tür und Kanten abkleben\",\n      \"quantity\": 2.5,\n      \"unit\": \"h\",\n      \"unit_price\": 55.0,\n      \"category\": \"preparation\"\n    },\n    {\n      \"description\": \"Leichte Ausbesserungen, Schleifen und Entstauben\",\n      \"quantity\": 1.5,\n      \"unit\": \"h\",\n      \"unit_price\": 55.0,\n      \"category\": \"preparation\"\n    },\n    {\n      \"description\": \"2x Anstrich Wände und Decke in Weiß\",\n      \"quantity\": 6.5,\n      \"unit\": \"h\",\n      \"unit_price\": 55.0,\n      \"category\": \"labor\"\n    },\n    {\n      \"description\": \"Dispersionsfarbe weiß Standardqualität\",\n      \"quantity\": 17.0,\n      \"unit\": \"L\",\n      \"unit_price\": 8.0,\n      \"category\": \"material\"\n    },\n    {\n      \"description\": \"Abdeck- und Verbrauchsmaterial\",\n      \"quantity\": 1.0,\n      \"unit\": \"pauschal\",\n      \"unit_price\": 35.0,\n      \"category\": \"material\"\n    }\n  ],\n  \"subtotal\": 748.5,\n  \"vat_amount\": 142.22,\n  \"total_amount\": 890.72,\n  \"notes\": \"Annahme: 53,7 m² Streichfläche, 2 Anstriche eingeplant, Möbel sind bereits ausgeräumt, Laminat wird abgedeckt. Es sind nur leichte Vorarbeiten berücksichtigt; größere Schäden oder ein zusätzlicher Sperrgrund wären Nachtrag.\",\n  \"recommendations\": [\n    \"Wenn die gelbliche Altfarbe stark durchschlägt, zusätzlich einen Isolier- oder Sperrgrund einplanen.\",\n    \"Bei mehr als nur kleinen Fehlstellen bitte ein separates Aufmaß für Spachtel- und Schleifarbeiten machen.\"\n  ]\n}",
+  "quote_extracted": {
+    "project_title": "Schlafzimmer komplett streichen (Wände und Decke)",
+    "items": [
+      {
+        "description": "Abdecken von Laminat, Fenster/Tür und Kanten abkleben",
+        "quantity": 2.5,
+        "unit": "h",
+        "unit_price": 55.0,
+        "category": "preparation"
+      },
+      {
+        "description": "Leichte Ausbesserungen, Schleifen und Entstauben",
+        "quantity": 1.5,
+        "unit": "h",
+        "unit_price": 55.0,
+        "category": "preparation"
+      },
+      {
+        "description": "2x Anstrich Wände und Decke in Weiß",
+        "quantity": 6.5,
+        "unit": "h",
+        "unit_price": 55.0,
+        "category": "labor"
+      },
+      {
+        "description": "Dispersionsfarbe weiß Standardqualität",
+        "quantity": 17.0,
+        "unit": "L",
+        "unit_price": 8.0,
+        "category": "material"
+      },
+      {
+        "description": "Abdeck- und Verbrauchsmaterial",
+        "quantity": 1.0,
+        "unit": "pauschal",
+        "unit_price": 35.0,
+        "category": "material"
+      }
+    ],
+    "subtotal": 748.5,
+    "vat_amount": 142.22,
+    "total_amount": 890.72,
+    "notes": "Annahme: 53,7 m² Streichfläche, 2 Anstriche eingeplant, Möbel sind bereits ausgeräumt, Laminat wird abgedeckt. Es sind nur leichte Vorarbeiten berücksichtigt; größere Schäden oder ein zusätzlicher Sperrgrund wären Nachtrag.",
+    "recommendations": [
+      "Wenn die gelbliche Altfarbe stark durchschlägt, zusätzlich einen Isolier- oder Sperrgrund einplanen.",
+      "Bei mehr als nur kleinen Fehlstellen bitte ein separates Aufmaß für Spachtel- und Schleifarbeiten machen."
+    ]
+  }
+}

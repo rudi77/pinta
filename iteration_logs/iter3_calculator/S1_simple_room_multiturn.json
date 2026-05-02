@@ -1,0 +1,105 @@
+{
+  "scenario_id": "S1_simple_room",
+  "label": "Einzelnes Schlafzimmer streichen",
+  "elapsed_seconds": 14.06,
+  "analysis": {
+    "analysis": {
+      "project_type": "Schlafzimmer streichen",
+      "estimated_area": null,
+      "complexity": "medium",
+      "missing_info": [
+        "Fläche der Wände und Decke in Quadratmetern",
+        "Höhe der Wände",
+        "Zustand der Wände (z.B. Risse, Löcher)",
+        "Zugänglichkeit des Raumes (Möbelverschiebung erforderlich?)",
+        "Vorarbeiten (z.B. Abkleben, Spachteln)"
+      ]
+    },
+    "questions": [
+      {
+        "id": "q1",
+        "question": "Wie groß ist die Fläche der Wände und Decke in Quadratmetern?",
+        "type": "number"
+      },
+      {
+        "id": "q2",
+        "question": "Wie hoch sind die Wände?",
+        "type": "number"
+      },
+      {
+        "id": "q3",
+        "question": "In welchem Zustand sind die Wände? Gibt es Risse oder Löcher?",
+        "type": "text"
+      },
+      {
+        "id": "q4",
+        "question": "Müssen Möbel umgestellt werden, oder ist der Raum leicht zugänglich?",
+        "type": "multiple_choice",
+        "options": [
+          "Ja, Möbel müssen umgestellt werden",
+          "Nein, der Raum ist leicht zugänglich"
+        ]
+      }
+    ],
+    "suggestions": [
+      "Bitte messen Sie die Fläche der Wände und Decke, um eine genauere Schätzung zu erhalten.",
+      "Überlegen Sie, ob eventuell Vorarbeiten wie Spachteln nötig sind.",
+      "Achten Sie darauf, Möbel rechtzeitig zu entfernen oder abzudecken, um Schäden zu vermeiden."
+    ]
+  },
+  "quote": {
+    "quote": {
+      "project_title": "Schlafzimmer komplett streichen",
+      "subtotal": 610.5,
+      "vat_amount": 116.0,
+      "total_amount": 726.5,
+      "labor_hours": 0,
+      "hourly_rate": 0,
+      "material_cost": 44.1,
+      "additional_costs": 0
+    },
+    "items": [
+      {
+        "description": "Streichen der Wände (inkl. Vorarbeiten)",
+        "quantity": 39.0,
+        "unit": "m²",
+        "unit_price": 10.0,
+        "category": "labor",
+        "total_price": 390.0,
+        "position": 1
+      },
+      {
+        "description": "Streichen der Decke (inkl. Vorarbeiten)",
+        "quantity": 14.7,
+        "unit": "m²",
+        "unit_price": 10.0,
+        "category": "labor",
+        "total_price": 147.0,
+        "position": 2
+      },
+      {
+        "description": "Abdecken des Bodens (Laminat)",
+        "quantity": 14.7,
+        "unit": "m²",
+        "unit_price": 2.0,
+        "category": "additional",
+        "total_price": 29.4,
+        "position": 3
+      },
+      {
+        "description": "Dispersionsfarbe, weiß (2 Anstriche)",
+        "quantity": 14.7,
+        "unit": "L",
+        "unit_price": 3.0,
+        "category": "material",
+        "total_price": 44.1,
+        "position": 4
+      }
+    ],
+    "notes": "Die Vorarbeiten sind minimal, da die alte Farbe gleichmäßig ist. Die Berechnung für die Farbe basiert auf 2 Anstrichen für Wand und Decke.",
+    "recommendations": [
+      "Die Möbel sollten vor Beginn der Arbeiten vollständig ausgeräumt werden.",
+      "Es wird empfohlen, den Boden während der Arbeiten gut abzudecken, um Schäden zu vermeiden."
+    ]
+  }
+}

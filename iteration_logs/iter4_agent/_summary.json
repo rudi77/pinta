@@ -1,0 +1,29 @@
+{
+  "model_alias": "main",
+  "scenarios": [
+    {
+      "id": "S1_simple_room",
+      "status": "ExecutionStatus.COMPLETED",
+      "items": 5,
+      "total": 890.72,
+      "tokens": 8472,
+      "elapsed_s": 21.68
+    },
+    {
+      "id": "S2_apartment_renovation",
+      "status": "ExecutionStatus.COMPLETED",
+      "items": 9,
+      "total": 6589.03,
+      "tokens": 10764,
+      "elapsed_s": 35.14
+    },
+    {
+      "id": "S3_facade_outdoor",
+      "status": "ExecutionStatus.COMPLETED",
+      "items": 8,
+      "total": 11557.28,
+      "tokens": 11059,
+      "elapsed_s": 34.52
+    }
+  ]
+}

@@ -6,6 +6,7 @@ from datetime import datetime
 import logging
 import base64
 from src.core.settings import settings
+from src.services import quote_calculator
 
 logger = logging.getLogger(__name__)
 
@@ -301,7 +302,7 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Schema (kein Markdown):
 
         try:
             system_prompt = f"""Du bist ein erfahrener Maler-Meister und erstellst präzise Kostenvoranschläge.
-            Basierend auf der Projektbeschreibung, den Antworten des Kunden und den angehängten Dokumenten (Pläne, Fotos), erstelle einen detaillierten Kostenvoranschlag mit realistischen Preisen für den deutschen Markt.
+            Basierend auf der Projektbeschreibung, den Antworten des Kunden und den angehängten Dokumenten (Pläne, Fotos), identifiziere die einzelnen Positionen für einen detaillierten Kostenvoranschlag.
 
             {self._build_cost_instructions(hourly_rate, material_cost_markup)}
 
@@ -316,31 +317,19 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Schema (kein Markdown):
             - Regionale Preisunterschiede (Deutschland)
             - Die Inhalte und Hinweise aus den hochgeladenen Dokumenten
 
-            STEUER-AUSWEIS (verbindlich):
-            - subtotal = Summe aller Positionen NETTO
-            - vat_amount = subtotal × 0.19 (MwSt 19%)
-            - total_amount = subtotal + vat_amount (BRUTTO — was der Kunde zahlt)
-            - Niemals total_amount als Netto-Summe ausweisen.
+            DEINE AUFGABE: Liste der Positionen identifizieren. Du musst NICHT subtotal, MwSt oder total_amount ausrechnen — das macht ein deterministischer Calculator danach.
+            - Pro Position: description, quantity, unit, unit_price (NETTO), category. total_price wird automatisch berechnet als quantity × unit_price.
+            - Lohn-Positionen NUR ALS EINS von beiden ausweisen: entweder als Stunden-Position (unit="h", unit_price=Stundensatz) ODER als €/m²-Pauschal-Position (unit="m²", unit_price=€/m²-Tarif). NIEMALS beides für dieselbe Leistung.
 
             Antworte im JSON-Format:
             {{
-                "quote": {{
-                    "project_title": "string",
-                    "subtotal": number,
-                    "vat_amount": number,
-                    "total_amount": number,
-                    "labor_hours": number,
-                    "hourly_rate": number,
-                    "material_cost": number,
-                    "additional_costs": number
-                }},
+                "project_title": "string",
                 "items": [
                     {{
                         "description": "string",
                         "quantity": number,
-                        "unit": "string",
+                        "unit": "string (m²|h|L|Stk|pauschal)",
                         "unit_price": number,
-                        "total_price": number,
                         "category": "labor|material|additional"
                     }}
                 ],
@@ -393,8 +382,16 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Schema (kein Markdown):
                     lines = content.strip().split("\n")
                     lines = [l for l in lines if not l.strip().startswith("```")]
                     content = "\n".join(lines)
-                result = json.loads(content)
-                return result
+                llm_result = json.loads(content)
+                project_text = " ".join([
+                    str(project_data.get("description", "")),
+                    str(project_data.get("additional_info", "")),
+                ])
+                return self._finalize_quote_with_calculator(
+                    llm_result=llm_result,
+                    project_text=project_text,
+                    hourly_rate=hourly_rate,
+                )
             except json.JSONDecodeError as je:
                 logger.error(f"Failed to parse OpenAI quote JSON: {content}")
                 self._raise_if_strict(je)
@@ -404,6 +401,65 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Schema (kein Markdown):
             logger.error(f"OpenAI API error in quote generation: {str(e)}")
             self._raise_if_strict(e)
             return self._get_mock_quote_response(project_data, answers)
+
+    def _finalize_quote_with_calculator(
+        self,
+        llm_result: Dict,
+        project_text: str,
+        hourly_rate: Optional[float] = None,
+    ) -> Dict:
+        """Run LLM-identified positions through the deterministic calculator,
+        then reshape into the legacy `{quote: {...}, items: [...]}` envelope
+        so routes/ai.py and the QuickQuoteResponse schema keep working.
+
+        The calculator owns: total_price normalization, subtotal, VAT, totals,
+        plausibility warnings (merged into notes).
+        """
+        items_in = llm_result.get("items", []) or []
+        project_type = quote_calculator.detect_project_type(project_text)
+        calc = quote_calculator.calculate(items_in, project_type=project_type)
+
+        # Reattach position numbers & ensure unit defaults — needed by Quote
+        # and QuickQuoteResponse downstream.
+        items_out = []
+        for idx, item in enumerate(calc.items, start=1):
+            item.setdefault("position", idx)
+            item.setdefault("unit", "Stk")
+            item.setdefault("category", item.get("category", "labor"))
+            items_out.append(item)
+
+        labor_hours = sum(
+            float(i.get("quantity", 0) or 0)
+            for i in items_out
+            if (i.get("unit") or "").lower() in {"h", "std", "stunde", "stunden"}
+            and (i.get("category") or "").lower() == "labor"
+        )
+        material_cost = sum(
+            float(i.get("total_price", 0) or 0)
+            for i in items_out
+            if (i.get("category") or "").lower() == "material"
+        )
+
+        notes = llm_result.get("notes", "") or ""
+        if calc.warnings:
+            warnings_block = "Plausibilitätshinweise: " + " | ".join(calc.warnings)
+            notes = f"{notes}\n\n{warnings_block}".strip() if notes else warnings_block
+
+        return {
+            "quote": {
+                "project_title": llm_result.get("project_title", "Malerarbeiten"),
+                "subtotal": calc.subtotal,
+                "vat_amount": calc.vat_amount,
+                "total_amount": calc.total_amount,
+                "labor_hours": labor_hours,
+                "hourly_rate": hourly_rate or 0,
+                "material_cost": round(material_cost, 2),
+                "additional_costs": 0,
+            },
+            "items": items_out,
+            "notes": notes,
+            "recommendations": llm_result.get("recommendations", []),
+        }
 
     async def generate_quick_quote(self, service_description: str, area: Optional[str] = None,
                                    additional_info: Optional[str] = None,
@@ -424,23 +480,19 @@ Erstelle einen professionellen Kostenvoranschlag basierend auf der Beschreibung 
 
 {self._MATERIAL_USAGE_RULES}
 
-Das Angebot soll:
-- Realistische Positionen mit Einheiten und Preisen enthalten
-- Materialkosten (Farbe, Grundierung, Abdeckmaterial) separat auflisten
-- Vorarbeiten (Abkleben, Abdecken, Grundierung) berücksichtigen
-- Netto-Zwischensumme und Mehrwertsteuer (19%) separat ausweisen
-- Typische Formulierungen eines deutschen Handwerksbetriebs nutzen
-- Bei fehlenden Flächenangaben den Plausibilitätsregeln folgen und Annahmen im 'notes'-Feld benennen
+DEINE AUFGABE: Liste der Positionen identifizieren. Du musst NICHT subtotal, MwSt oder total_amount ausrechnen — das macht ein deterministischer Calculator danach.
+- Pro Position: description, quantity, unit, unit_price (NETTO), category. total_price wird automatisch berechnet als quantity × unit_price.
+- Material (Farbe, Grundierung, Abdeckmaterial) als separate Positionen mit category="material".
+- Vorarbeiten als eigene Position (entweder pauschal oder als Stunden), category="preparation" oder "labor".
+- Lohn-Positionen NUR ALS EINS von beiden ausweisen: entweder als Stunden-Position (unit="h", unit_price=Stundensatz) ODER als €/m²-Pauschal-Position (unit="m²", unit_price=€/m²-Tarif). NIEMALS beides für dieselbe Leistung.
+- Bei fehlenden Flächenangaben den Plausibilitätsregeln folgen und Annahmen im 'notes'-Feld benennen.
 
 Antworte AUSSCHLIESSLICH im folgenden JSON-Format (kein Markdown, keine Erklärungen drumherum):
 {{
   "project_title": "Kurzer Projekttitel",
   "items": [
-    {{"position": 1, "description": "Beschreibung der Position", "quantity": 1.0, "unit": "m²", "unit_price": 10.00, "total_price": 10.00, "category": "labor|material|preparation"}}
+    {{"description": "Beschreibung der Position", "quantity": 1.0, "unit": "m²", "unit_price": 10.00, "category": "labor"}}
   ],
-  "subtotal": 0.00,
-  "vat_amount": 0.00,
-  "total_amount": 0.00,
   "notes": "Hinweise zum Angebot",
   "recommendations": ["Empfehlung 1"]
 }}"""
@@ -471,8 +523,32 @@ Antworte AUSSCHLIESSLICH im folgenden JSON-Format (kein Markdown, keine Erkläru
                 lines = [l for l in lines if not l.strip().startswith("```")]
                 content = "\n".join(lines)
 
-            result = json.loads(content)
-            return result
+            llm_result = json.loads(content)
+            project_text = " ".join(filter(None, [service_description, area, additional_info]))
+            project_type = quote_calculator.detect_project_type(project_text)
+            calc = quote_calculator.calculate(llm_result.get("items", []), project_type=project_type)
+
+            items_out = []
+            for idx, item in enumerate(calc.items, start=1):
+                item.setdefault("position", idx)
+                item.setdefault("unit", "Stk")
+                item.setdefault("category", item.get("category", "labor"))
+                items_out.append(item)
+
+            notes = llm_result.get("notes", "") or ""
+            if calc.warnings:
+                warnings_block = "Plausibilitätshinweise: " + " | ".join(calc.warnings)
+                notes = f"{notes}\n\n{warnings_block}".strip() if notes else warnings_block
+
+            return {
+                "project_title": llm_result.get("project_title", "Malerarbeiten"),
+                "items": items_out,
+                "subtotal": calc.subtotal,
+                "vat_amount": calc.vat_amount,
+                "total_amount": calc.total_amount,
+                "notes": notes,
+                "recommendations": llm_result.get("recommendations", []),
+            }
 
         except json.JSONDecodeError as je:
             logger.error(f"Failed to parse quick quote JSON: {content}")

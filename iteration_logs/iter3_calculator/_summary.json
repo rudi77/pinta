@@ -1,0 +1,24 @@
+{
+  "ai_enabled": true,
+  "model": "gpt-4o-mini",
+  "scenarios": [
+    {
+      "id": "S1_simple_room",
+      "label": "Einzelnes Schlafzimmer streichen",
+      "quick_ok": true,
+      "multiturn_ok": true
+    },
+    {
+      "id": "S2_apartment_renovation",
+      "label": "3-Zi-Wohnung Renovierung mit Vorarbeiten",
+      "quick_ok": true,
+      "multiturn_ok": true
+    },
+    {
+      "id": "S3_facade_outdoor",
+      "label": "Fassadenanstrich Einfamilienhaus",
+      "quick_ok": true,
+      "multiturn_ok": true
+    }
+  ]
+}

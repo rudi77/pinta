@@ -219,3 +219,8 @@ backend/maler_kostenvoranschlag.db
 # Iteration script raw console logs (stderr captures with cp1252 artifacts).
 # JSON outputs and _evaluation.md notes ARE tracked as historical record.
 iteration_logs/**/_console*.log
+
+# pytaskforce work directories — agent state per session, regenerated per run
+.taskforce_smoke/
+backend/.taskforce_maler/
+traces/

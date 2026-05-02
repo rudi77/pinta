@@ -59,15 +59,18 @@ def _make_service_with_stub(stub_payload: dict) -> AIService:
 
 
 def test_quick_quote_prompt_builds_without_fstring_crash():
-    """Regression: generate_quick_quote must not raise ValueError from the prompt."""
+    """Regression: generate_quick_quote must not raise ValueError from the prompt.
+
+    Since iter 3 the LLM only emits positions; the calculator computes totals.
+    We assert the calculator-derived totals are consistent with the items.
+    """
     payload = {
         "project_title": "Test",
         "items": [
-            {"position": 1, "description": "x", "quantity": 1.0, "unit": "m²",
-             "unit_price": 1.0, "total_price": 1.0, "category": "labor"}
+            {"description": "Streichen", "quantity": 10.0, "unit": "m²",
+             "unit_price": 12.0, "category": "labor"}
         ],
-        "subtotal": 1.0, "vat_amount": 0.19, "total_amount": 1.19,
-        "notes": "", "recommendations": []
+        "notes": "stub", "recommendations": ["x"]
     }
     service = _make_service_with_stub(payload)
 
@@ -79,35 +82,42 @@ def test_quick_quote_prompt_builds_without_fstring_crash():
         material_cost_markup=15.0,
     ))
 
-    assert result == payload, "Prompt built and stub response was returned"
-    # Verify the system prompt actually went out and contains the JSON schema
+    # Calculator output must be arithmetically correct
+    assert result["subtotal"] == 120.0
+    assert result["vat_amount"] == 22.8
+    assert result["total_amount"] == 142.8
+    assert result["items"][0]["total_price"] == 120.0
+    assert result["project_title"] == "Test"
+    # System prompt regression checks
     sent_messages = service.client.chat.completions.create.call_args.kwargs["messages"]
     system_prompt = sent_messages[0]["content"]
     assert "JSON-Format" in system_prompt
-    # JSON example in prompt must contain literal { } (proves the f-string
-    # double-brace escape produced real braces in the final string)
     assert '"project_title"' in system_prompt
     assert '"items"' in system_prompt
-    # Cost params must be substituted
     assert "50.00 EUR/h" in system_prompt
     assert "15.0%" in system_prompt
 
 
 def test_quote_generation_prompt_builds_without_fstring_crash():
-    """Regression: process_answers_and_generate_quote prompt must not crash."""
+    """Regression: process_answers_and_generate_quote prompt must not crash.
+
+    LLM emits flat {project_title, items, ...}; service rewraps into the
+    legacy {quote: {...}, items, ...} envelope after running the calculator.
+    """
     payload = {
-        "quote": {"project_title": "Test", "total_amount": 100.0,
-                  "labor_hours": 2.0, "hourly_rate": 50.0,
-                  "material_cost": 0.0, "additional_costs": 0.0},
-        "items": [{"description": "x", "quantity": 1.0, "unit": "Stk",
-                   "unit_price": 100.0, "total_price": 100.0,
-                   "category": "labor"}],
+        "project_title": "Test",
+        "items": [
+            {"description": "Lohn", "quantity": 10.0, "unit": "h",
+             "unit_price": 55.0, "category": "labor"},
+            {"description": "Farbe", "quantity": 5.0, "unit": "L",
+             "unit_price": 10.0, "category": "material"},
+        ],
         "notes": "", "recommendations": []
     }
     service = _make_service_with_stub(payload)
 
     result = asyncio.run(service.process_answers_and_generate_quote(
-        project_data={"description": "Test", "area": "12 m²"},
+        project_data={"description": "Test innen", "area": "12 m²"},
         answers=[{"question_id": "x", "answer": "y"}],
         conversation_history=None,
         document_files=None,
@@ -116,10 +126,23 @@ def test_quote_generation_prompt_builds_without_fstring_crash():
         material_context=None,
     ))
 
-    assert result == payload
+    # Envelope shape preserved for routes/ai.py
+    assert "quote" in result
+    assert "items" in result
+    assert result["quote"]["project_title"] == "Test"
+    # Calculator-derived totals
+    assert result["quote"]["subtotal"] == 600.0  # 10*55 + 5*10
+    assert result["quote"]["vat_amount"] == 114.0
+    assert result["quote"]["total_amount"] == 714.0
+    # Labor hours aggregated from h-units
+    assert result["quote"]["labor_hours"] == 10.0
+    # Material cost aggregated from material category
+    assert result["quote"]["material_cost"] == 50.0
+
     sent_messages = service.client.chat.completions.create.call_args.kwargs["messages"]
     system_prompt = sent_messages[0]["content"]
-    assert '"quote"' in system_prompt
+    assert "JSON-Format" in system_prompt
+    assert '"project_title"' in system_prompt
     assert '"items"' in system_prompt
     assert "55.00 EUR/h" in system_prompt
     assert "20.0%" in system_prompt
@@ -127,10 +150,7 @@ def test_quote_generation_prompt_builds_without_fstring_crash():
 
 def test_quote_generation_with_material_context_inlined():
     """RAG context must be embedded into the prompt without breaking it."""
-    payload = {"quote": {"project_title": "T", "total_amount": 0.0,
-                         "labor_hours": 0.0, "hourly_rate": 0.0,
-                         "material_cost": 0.0, "additional_costs": 0.0},
-               "items": [], "notes": "", "recommendations": []}
+    payload = {"project_title": "T", "items": [], "notes": "", "recommendations": []}
     service = _make_service_with_stub(payload)
 
     material_context = [
@@ -149,3 +169,22 @@ def test_quote_generation_with_material_context_inlined():
     assert "REALE MATERIALPREISE" in system_prompt
     assert "Alpina Weiss" in system_prompt
     assert "4.99 EUR/L" in system_prompt
+
+
+def test_calculator_warnings_appear_in_notes():
+    """Plausibility warnings produced by the calculator land in the notes field."""
+    payload = {
+        "project_title": "Bad pricing",
+        "items": [
+            {"description": "Streichen Innen zu billig", "quantity": 100, "unit": "m²",
+             "unit_price": 4.0, "category": "labor"}  # under innen band 8-40
+        ],
+        "notes": "", "recommendations": []
+    }
+    service = _make_service_with_stub(payload)
+    result = asyncio.run(service.generate_quick_quote(
+        service_description="Innenraum streichen",
+        area=None, additional_info=None,
+    ))
+    assert "Plausibilitätshinweise" in result["notes"]
+    assert "liegt unter" in result["notes"]

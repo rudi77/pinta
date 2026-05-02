@@ -1,0 +1,115 @@
+{
+  "scenario_id": "S2_apartment_renovation",
+  "label": "3-Zi-Wohnung Renovierung mit Vorarbeiten",
+  "elapsed_seconds": 12.09,
+  "analysis": {
+    "analysis": {
+      "project_type": "Wohnungsrenovierung",
+      "estimated_area": null,
+      "complexity": "medium",
+      "missing_info": [
+        "Gesamtfläche der zu renovierenden Räume",
+        "Höhe der Decken",
+        "Zustand der Wände (zusätzlich zu Rissen und Wasserfleck)",
+        "Materialwünsche für Farben oder Tapeten"
+      ]
+    },
+    "questions": [
+      {
+        "id": "q1",
+        "question": "Wie groß ist die Gesamtfläche der zu renovierenden Räume?",
+        "type": "number"
+      },
+      {
+        "id": "q2",
+        "question": "Welche Höhe haben die Decken in den verschiedenen Räumen?",
+        "type": "number"
+      },
+      {
+        "id": "q3",
+        "question": "Haben Sie spezielle Materialwünsche für Farben oder Tapeten?",
+        "type": "multiple_choice",
+        "options": [
+          "Latexfarbe",
+          "Acrylfarbe",
+          "Vliestapete",
+          "Papier-Tapete",
+          "keine speziellen Wünsche"
+        ]
+      },
+      {
+        "id": "q4",
+        "question": "Gibt es besondere Anforderungen oder Einschränkungen bezüglich der Zugänglichkeit der Räume?",
+        "type": "text"
+      }
+    ],
+    "suggestions": [
+      "Bitte stellen Sie sicher, dass die Räume vor Beginn der Arbeiten leergeräumt sind.",
+      "Es könnte hilfreich sein, einen Fachmann zur Beurteilung des Wasserflecks hinzuzuziehen, um sicherzustellen, dass kein aktiver Wasserschaden vorliegt."
+    ]
+  },
+  "quote": {
+    "quote": {
+      "project_title": "Renovierung 3-Zimmer-Wohnung",
+      "subtotal": 7195.0,
+      "vat_amount": 1367.05,
+      "total_amount": 8562.05,
+      "labor_hours": 0,
+      "hourly_rate": 0,
+      "material_cost": 1065.0,
+      "additional_costs": 0
+    },
+    "items": [
+      {
+        "description": "Wände spachteln (Risse)",
+        "quantity": 175.0,
+        "unit": "m²",
+        "unit_price": 30.0,
+        "category": "labor",
+        "total_price": 5250.0,
+        "position": 1
+      },
+      {
+        "description": "Isoliergrundierung für Wasserfleck",
+        "quantity": 1.0,
+        "unit": "L",
+        "unit_price": 15.0,
+        "category": "material",
+        "total_price": 15.0,
+        "position": 2
+      },
+      {
+        "description": "Premium-Allergiker-Dispersionfarbe (2 Anstriche)",
+        "quantity": 70.0,
+        "unit": "L",
+        "unit_price": 15.0,
+        "category": "material",
+        "total_price": 1050.0,
+        "position": 3
+      },
+      {
+        "description": "Decken streichen (inkl. 2 Anstriche)",
+        "quantity": 65.0,
+        "unit": "m²",
+        "unit_price": 12.0,
+        "category": "labor",
+        "total_price": 780.0,
+        "position": 4
+      },
+      {
+        "description": "Heizkörper umstreichen",
+        "quantity": 4.0,
+        "unit": "Stk",
+        "unit_price": 25.0,
+        "category": "labor",
+        "total_price": 100.0,
+        "position": 5
+      }
+    ],
+    "notes": "Die Wohnung hat eine gute Zugänglichkeit und ist leerstehend, was die Arbeiten erleichtert. Premiumfarbe wird verwendet, um Allergikern gerecht zu werden.",
+    "recommendations": [
+      "Überprüfung der Risse nach dem Spachteln vor dem Anstrich.",
+      "Verwendung von hochwertiger Farbe für alle Anstriche."
+    ]
+  }
+}

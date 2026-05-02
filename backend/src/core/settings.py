@@ -29,11 +29,22 @@ class Settings(BaseSettings):
     # Separate Vision-capable model for multi-modal photo analysis (Premium feature)
     openai_vision_model: str = "gpt-4o"
 
-    # Azure OpenAI (used by pytaskforce via LiteLLM; env vars prefixed AZURE_OPENAI_*)
+    # Azure OpenAI (used by pytaskforce via LiteLLM; env vars prefixed AZURE_OPENAI_*).
+    # taskforce_setup.bridge_env_for_litellm() maps these to the AZURE_API_*
+    # variables LiteLLM expects, so we keep ONE source of truth in .env.
     azure_openai_api_key: str = ""
     azure_openai_endpoint: str = ""
     azure_openai_api_version: str = "2024-10-21"
     azure_openai_deployment: str = "gpt-5.4-mini"
+
+    # ---- pytaskforce Maler-Agent ----------------------------------------
+    # Which model alias from pytaskforce' configs/llm_config.yaml to use.
+    # "main" → azure/gpt-5.4-mini (default). Other valid aliases:
+    # "fast", "powerful", "powerful-1", "claude-sonnet", "claude-haiku", etc.
+    # Switch model by setting AGENT_LLM_MODEL_ALIAS in .env, no code change.
+    agent_llm_model_alias: str = "main"
+    # Maximum react-loop steps per agent.execute() — caps cost runaway.
+    agent_max_steps: int = 12
 
     # Telegram bot (Maler-Agent Messenger Interface)
     telegram_bot_token: str = ""

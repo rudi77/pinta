@@ -1,0 +1,54 @@
+{
+  "scenario_id": "S2_apartment_renovation",
+  "label": "3-Zi-Wohnung Renovierung mit Vorarbeiten",
+  "elapsed_seconds": 4.07,
+  "result": {
+    "project_title": "Renovierung 3-Zimmer-Wohnung",
+    "items": [
+      {
+        "description": "Wände und Decken streichen (Premium-Farbe, Allergikerfreundlich)",
+        "quantity": 265.2,
+        "unit": "m²",
+        "unit_price": 12.0,
+        "category": "labor",
+        "total_price": 3182.4,
+        "position": 1
+      },
+      {
+        "description": "Vorarbeiten (Risse spachteln, Wasserfleck behandeln)",
+        "quantity": 1.0,
+        "unit": "pauschal",
+        "unit_price": 400.0,
+        "category": "preparation",
+        "total_price": 400.0,
+        "position": 2
+      },
+      {
+        "description": "Premium-Dispersionsfarbe",
+        "quantity": 38.0,
+        "unit": "l",
+        "unit_price": 15.0,
+        "category": "material",
+        "total_price": 570.0,
+        "position": 3
+      },
+      {
+        "description": "Spachtelmasse für Risse",
+        "quantity": 10.0,
+        "unit": "kg",
+        "unit_price": 3.0,
+        "category": "material",
+        "total_price": 30.0,
+        "position": 4
+      }
+    ],
+    "subtotal": 4182.4,
+    "vat_amount": 794.66,
+    "total_amount": 4977.06,
+    "notes": "Die Streichfläche wurde auf Basis der Wohnfläche und der Deckenhöhe berechnet. Premium-Farbe wird verwendet, um Allergikern gerecht zu werden. Vorarbeiten beinhalten das Spachteln von Rissen und die Behandlung des Wasserflecks.",
+    "recommendations": [
+      "Regelmäßige Wartung der Wände und Decken empfehlen",
+      "Verwendung von allergikerfreundlichen Materialien für zukünftige Renovierungen"
+    ]
+  }
+}

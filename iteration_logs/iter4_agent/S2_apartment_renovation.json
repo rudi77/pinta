@@ -1,0 +1,89 @@
+{
+  "scenario_id": "S2_apartment_renovation",
+  "label": "3-Zi-Wohnung Renovierung mit Vorarbeiten",
+  "elapsed_seconds": 35.14,
+  "status": "ExecutionStatus.COMPLETED",
+  "token_usage": {
+    "prompt": 6203,
+    "completion": 4561,
+    "total": 10764
+  },
+  "final_message": "{\n  \"project_title\": \"Komplette Renovierung einer 3-Zimmer-Wohnung inkl. Wände, Decken und Heizkörper\",\n  \"items\": [\n    {\n      \"description\": \"Schutz-, Abkleb- und Vorarbeiten in der leerstehenden Wohnung\",\n      \"quantity\": 8,\n      \"unit\": \"h\",\n      \"unit_price\": 55,\n      \"category\": \"preparation\"\n    },\n    {\n      \"description\": \"Risse ausbessern, spachteln und schleifen\",\n      \"quantity\": 14,\n      \"unit\": \"h\",\n      \"unit_price\": 55,\n      \"category\": \"preparation\"\n    },\n    {\n      \"description\": \"Wasserfleck isolieren\",\n      \"quantity\": 2,\n      \"unit\": \"h\",\n      \"unit_price\": 55,\n      \"category\": \"preparation\"\n    },\n    {\n      \"description\": \"Wände und Decken streichen, inkl. Türen und Fenster aussparen\",\n      \"quantity\": 44,\n      \"unit\": \"h\",\n      \"unit_price\": 55,\n      \"category\": \"labor\"\n    },\n    {\n      \"description\": \"Heizkörper (5 Stück) reinigen, anschleifen und umstreichen\",\n      \"quantity\": 10,\n      \"unit\": \"h\",\n      \"unit_price\": 55,\n      \"category\": \"additional\"\n    },\n    {\n      \"description\": \"Premium-Allergiker-Dispersion weiß matt\",\n      \"quantity\": 75,\n      \"unit\": \"L\",\n      \"unit_price\": 13,\n      \"category\": \"material\"\n    },\n    {\n      \"description\": \"Isoliergrund für Wasserfleck\",\n      \"quantity\": 1,\n      \"unit\": \"L\",\n      \"unit_price\": 22,\n      \"category\": \"material\"\n    },\n    {\n      \"description\": \"Spachtelmasse, Schleifmittel und Abdeckmaterial pauschal\",\n      \"quantity\": 1,\n      \"unit\": \"pauschal\",\n      \"unit_price\": 165,\n      \"category\": \"material\"\n    },\n    {\n      \"description\": \"Heizkörperlack / Haftgrund pauschal\",\n      \"quantity\": 1,\n      \"unit\": \"pauschal\",\n      \"unit_price\": 85,\n      \"category\": \"material\"\n    }\n  ],\n  \"subtotal\": 5537,\n  \"vat_amount\": 1052.03,\n  \"total_amount\": 6589.03,\n  \"notes\": \"Annahmen: Die angegebenen 240 m² Streichfläche sind die zu bearbeitende Gesamtfläche; 2 Anstriche sind im Materialansatz enthalten. Die Wohnung ist leerstehend und gut zugänglich, daher wurden normale Schutz- und Abklebearbeiten kalkuliert. Der Wasserfleck wird als lokaler, nicht aktiver Schaden bewertet; nur Isoliergrund ist enthalten. Türen und Fenster werden ausgespart, Lackarbeiten an Innentüren sind nicht enthalten. Keine größeren Putzsanierungen oder Feuchteschäden über den genannten Wasserfleck hinaus.\",\n  \"recommendations\": [\n    \"Vor Start kurz Feuchte- und Haftprüfung am Wasserfleck machen.\",\n    \"Bei tieferen Rissen ggf. Armierungsband bzw. Glasvlies ergänzen.\",\n    \"Heizkörperanschlüsse und Ventile sauber maskieren, damit nichts verklebt.\"\n  ]\n}",
+  "quote_extracted": {
+    "project_title": "Komplette Renovierung einer 3-Zimmer-Wohnung inkl. Wände, Decken und Heizkörper",
+    "items": [
+      {
+        "description": "Schutz-, Abkleb- und Vorarbeiten in der leerstehenden Wohnung",
+        "quantity": 8,
+        "unit": "h",
+        "unit_price": 55,
+        "category": "preparation"
+      },
+      {
+        "description": "Risse ausbessern, spachteln und schleifen",
+        "quantity": 14,
+        "unit": "h",
+        "unit_price": 55,
+        "category": "preparation"
+      },
+      {
+        "description": "Wasserfleck isolieren",
+        "quantity": 2,
+        "unit": "h",
+        "unit_price": 55,
+        "category": "preparation"
+      },
+      {
+        "description": "Wände und Decken streichen, inkl. Türen und Fenster aussparen",
+        "quantity": 44,
+        "unit": "h",
+        "unit_price": 55,
+        "category": "labor"
+      },
+      {
+        "description": "Heizkörper (5 Stück) reinigen, anschleifen und umstreichen",
+        "quantity": 10,
+        "unit": "h",
+        "unit_price": 55,
+        "category": "additional"
+      },
+      {
+        "description": "Premium-Allergiker-Dispersion weiß matt",
+        "quantity": 75,
+        "unit": "L",
+        "unit_price": 13,
+        "category": "material"
+      },
+      {
+        "description": "Isoliergrund für Wasserfleck",
+        "quantity": 1,
+        "unit": "L",
+        "unit_price": 22,
+        "category": "material"
+      },
+      {
+        "description": "Spachtelmasse, Schleifmittel und Abdeckmaterial pauschal",
+        "quantity": 1,
+        "unit": "pauschal",
+        "unit_price": 165,
+        "category": "material"
+      },
+      {
+        "description": "Heizkörperlack / Haftgrund pauschal",
+        "quantity": 1,
+        "unit": "pauschal",
+        "unit_price": 85,
+        "category": "material"
+      }
+    ],
+    "subtotal": 5537,
+    "vat_amount": 1052.03,
+    "total_amount": 6589.03,
+    "notes": "Annahmen: Die angegebenen 240 m² Streichfläche sind die zu bearbeitende Gesamtfläche; 2 Anstriche sind im Materialansatz enthalten. Die Wohnung ist leerstehend und gut zugänglich, daher wurden normale Schutz- und Abklebearbeiten kalkuliert. Der Wasserfleck wird als lokaler, nicht aktiver Schaden bewertet; nur Isoliergrund ist enthalten. Türen und Fenster werden ausgespart, Lackarbeiten an Innentüren sind nicht enthalten. Keine größeren Putzsanierungen oder Feuchteschäden über den genannten Wasserfleck hinaus.",
+    "recommendations": [
+      "Vor Start kurz Feuchte- und Haftprüfung am Wasserfleck machen.",
+      "Bei tieferen Rissen ggf. Armierungsband bzw. Glasvlies ergänzen.",
+      "Heizkörperanschlüsse und Ventile sauber maskieren, damit nichts verklebt."
+    ]
+  }
+}

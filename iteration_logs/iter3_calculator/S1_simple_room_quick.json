@@ -1,0 +1,53 @@
+{
+  "scenario_id": "S1_simple_room",
+  "label": "Einzelnes Schlafzimmer streichen",
+  "elapsed_seconds": 4.07,
+  "result": {
+    "project_title": "Schlafzimmer komplett streichen",
+    "items": [
+      {
+        "description": "Streichen Wände und Decke (inkl. Vorarbeiten)",
+        "quantity": 30.0,
+        "unit": "m²",
+        "unit_price": 12.0,
+        "category": "labor",
+        "total_price": 360.0,
+        "position": 1
+      },
+      {
+        "description": "Abdeckmaterial für Boden",
+        "quantity": 1.0,
+        "unit": "m²",
+        "unit_price": 2.0,
+        "category": "material",
+        "total_price": 2.0,
+        "position": 2
+      },
+      {
+        "description": "Dispersionsfarbe (2 Anstriche)",
+        "quantity": 6.0,
+        "unit": "l",
+        "unit_price": 10.0,
+        "category": "material",
+        "total_price": 60.0,
+        "position": 3
+      },
+      {
+        "description": "Tiefgrund",
+        "quantity": 1.0,
+        "unit": "l",
+        "unit_price": 8.0,
+        "category": "material",
+        "total_price": 8.0,
+        "position": 4
+      }
+    ],
+    "subtotal": 430.0,
+    "vat_amount": 81.7,
+    "total_amount": 511.7,
+    "notes": "Die Streichfläche wurde auf Basis der Raumgröße und Standardfaustregeln kalkuliert. Vorarbeiten sind im Tarif enthalten.",
+    "recommendations": [
+      "Verwendung von hochwertiger Dispersionsfarbe für bessere Deckkraft"
+    ]
+  }
+}
