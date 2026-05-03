@@ -11,7 +11,9 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = '003_quota_management_enhancement'
-down_revision = '002_enhanced_document_processing'
+# down_revision must match revision ID of 002, which is '002_enhanced_docs'
+# (NOT the file name 002_enhanced_document_processing.py).
+down_revision = '002_enhanced_docs'
 branch_labels = None
 depends_on = None
 

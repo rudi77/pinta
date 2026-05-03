@@ -58,6 +58,21 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _sync_url(async_url: str) -> str:
+    """Strip async drivers so Alembic's sync engine_from_config works.
+
+    Pinta runs the app on aiosqlite/asyncpg, but Alembic's online migration
+    path uses a sync Engine. Map the async driver suffix to the matching
+    sync driver here so ``alembic upgrade head`` works without spawning an
+    event loop.
+    """
+    return (
+        async_url
+        .replace("sqlite+aiosqlite", "sqlite")
+        .replace("postgresql+asyncpg", "postgresql+psycopg2")
+    )
+
+
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
@@ -66,7 +81,7 @@ def run_migrations_online() -> None:
 
     """
     configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = settings.database_url
+    configuration["sqlalchemy.url"] = _sync_url(settings.database_url)
     connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",

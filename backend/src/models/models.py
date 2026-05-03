@@ -57,6 +57,8 @@ class User(Base):
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
     usage_tracking = relationship("UsageTracking", back_populates="user", cascade="all, delete-orphan")
     quota_notifications = relationship("QuotaNotification", back_populates="user", cascade="all, delete-orphan")
+    conversations = relationship("Conversation", back_populates="user", cascade="all, delete-orphan")
+    channel_links = relationship("ChannelLink", back_populates="user", cascade="all, delete-orphan")
 
 class Quote(Base):
     __tablename__ = "quotes"
@@ -257,6 +259,80 @@ class MaterialPrice(Base):
 
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class Conversation(Base):
+    """Persistent agent conversation thread for ONE user across ANY channel.
+
+    The agent's chat history lives here (not in the agent's local
+    StateManager) so Web App and Telegram-Bot share the same memory: a user
+    starts a quote on the phone via Telegram and continues editing in the
+    Web Dashboard, the agent has the full context either way.
+
+    A Conversation can be active or archived; ``/neu`` archives the active
+    one and starts a fresh thread. ``channel`` records where the
+    conversation was originally started (mostly diagnostic).
+    """
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    channel = Column(String(20), nullable=False, default="web")  # web, telegram, api
+    title = Column(String(200), nullable=True)  # auto-derived from first message
+    is_active = Column(Boolean, default=True, index=True)
+    archived_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="conversations")
+    messages = relationship(
+        "ConversationMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="ConversationMessage.id",
+    )
+
+
+class ConversationMessage(Base):
+    """One turn in a Conversation (user OR assistant)."""
+    __tablename__ = "conversation_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
+    role = Column(String(20), nullable=False)  # "user" | "assistant" | "system"
+    content = Column(Text, nullable=False)
+    # For agent runs: pdf_path, attachments, tool_call_count, etc.
+    extra_metadata = Column(Text, nullable=True)  # JSON-serialized
+
+    created_at = Column(DateTime, server_default=func.now())
+
+    conversation = relationship("Conversation", back_populates="messages")
+
+
+class ChannelLink(Base):
+    """Maps an external channel identity (e.g. Telegram chat_id) to a Pinta user.
+
+    A user can have multiple channel links — one per channel + external_id.
+    ``linking_token`` is a short-lived secret a Web user generates to
+    authenticate a channel adapter (e.g. ``/start <token>`` in Telegram).
+    Once consumed it gets cleared.
+    """
+    __tablename__ = "channel_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    channel = Column(String(20), nullable=False, index=True)  # telegram, teams, slack, ...
+    external_id = Column(String(128), nullable=False, index=True)  # telegram chat_id, teams conversation id
+    display_name = Column(String(120), nullable=True)
+    linking_token = Column(String(64), nullable=True, unique=True)  # one-shot secret
+    linking_token_expires_at = Column(DateTime, nullable=True)
+    is_anonymous_shadow = Column(Boolean, default=False)  # True for auto-created shadow users
+
+    created_at = Column(DateTime, server_default=func.now())
+    last_seen_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    user = relationship("User", back_populates="channel_links")
 
 
 class QuotaNotification(Base):

@@ -73,6 +73,11 @@ def register_pinta_tools() -> None:
             "module": "src.agents.tools.search_materials",
         },
         {
+            "name": "save_quote_to_db",
+            "type": "SaveQuoteToDbTool",
+            "module": "src.agents.tools.save_quote_to_db",
+        },
+        {
             "name": "generate_quote_pdf",
             "type": "GenerateQuotePdfTool",
             "module": "src.agents.tools.generate_quote_pdf",
@@ -127,13 +132,16 @@ async def create_maler_agent(*, tools: Optional[list[str]] = None) -> Any:
     factory = _get_factory()
     cfg = _load_config()
 
-    # Iter 7: python + search_materials + generate_quote_pdf
-    #         + multimedia (Bilder/PDF-Vision via pytaskforce native tool).
-    # multimedia liest base64-Bilder + PDFs, sodass der Agent Telegram-
-    # Photos und mitgesendete Pläne/Rechnungen interpretieren kann.
+    # Stage 1 (unified): python + search_materials + save_quote_to_db
+    #                    + generate_quote_pdf + multimedia.
+    # save_quote_to_db persists the finished quote into the Pinta DB so
+    # both Web and Telegram see the same Quote/QuoteItem records.
     tool_list = (
         tools if tools is not None
-        else ["python", "search_materials", "generate_quote_pdf", "multimedia"]
+        else [
+            "python", "search_materials", "save_quote_to_db",
+            "generate_quote_pdf", "multimedia",
+        ]
     )
 
     WORK_DIR.mkdir(parents=True, exist_ok=True)
