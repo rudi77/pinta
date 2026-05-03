@@ -154,6 +154,34 @@ app.include_router(quota.router, tags=["quota"])
 app.include_router(materials.router, tags=["materials"])
 app.include_router(agent.router)
 
+# Mount selected pytaskforce routers via the public host API so future
+# channel adapters (Teams, Slack, additional Telegram bots) can reach the
+# agent over the standard /api/v1/gateway/{channel}/* surface without us
+# rebuilding ChannelLink + AgentExecutor wiring per channel.
+#
+# Currently exposed:
+#   /api/v1/gateway/{channel}/messages  — normalized inbound payload
+#   /api/v1/gateway/{channel}/webhook   — raw provider webhook (Telegram, Teams)
+#   /api/v1/gateway/notify              — proactive push
+#   /api/v1/gateway/channels            — list configured channels
+#   /api/v1/skills, /api/v1/profiles, /api/v1/tools — discovery endpoints
+#
+# Telegram-Bot-Adapter (backend/src/telegram/runner.py) bleibt vorerst auf
+# /api/v1/agent/bot/* weil es Pinta-User-Mapping (ChannelLink, shadow-user)
+# vor jeder Mission setzt — pytaskforce' Gateway kennt die Pinta-User-Tabelle
+# nicht. Wenn wir das migrieren wollen: set_gateway_components_override mit
+# einem Pinta-eigenen ConversationStore + Recipient-Registry.
+try:
+    from taskforce.host import mount_routes
+    mount_routes(
+        app,
+        prefix="/api/v1",
+        include=["gateway", "skills", "profiles", "tools"],
+    )
+    logger.info("pytaskforce gateway routes mounted under /api/v1")
+except Exception as exc:
+    logger.warning("Could not mount pytaskforce routers: %s", exc)
+
 # Health check
 @app.get("/health")
 async def health_check():
