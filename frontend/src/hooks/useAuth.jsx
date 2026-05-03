@@ -24,9 +24,9 @@ export function AuthProvider({ children }) {
           const userData = await apiClient.getCurrentUser();
           setUser(userData);
           setIsAuthenticated(true);
+          setDemoMode(userData.email === 'demo@example.com');
         }
       } catch (err) {
-        console.error('Authentication check failed:', err);
         // Clear invalid token
         localStorage.removeItem('access_token');
         setIsAuthenticated(false);
@@ -56,6 +56,7 @@ export function AuthProvider({ children }) {
       const response = await apiClient.login(email, password);
       localStorage.setItem('access_token', response.access_token);
       setIsAuthenticated(true);
+      setDemoMode(false);
       
       // Fetch user data
       const userData = await apiClient.getCurrentUser();
@@ -69,16 +70,20 @@ export function AuthProvider({ children }) {
   };
 
   // Demo login function
-  const demoLogin = () => {
-    setIsAuthenticated(true);
-    setDemoMode(true);
-    setUser({
-      id: 'demo-user',
-      username: 'demo',
-      email: 'demo@example.com',
-      company_name: 'Demo Malerbetrieb',
-      is_premium: true
-    });
+  const demoLogin = async () => {
+    setError(null);
+    try {
+      const response = await apiClient.demoLogin();
+      localStorage.setItem('access_token', response.access_token);
+      const userData = await apiClient.getCurrentUser();
+      setIsAuthenticated(true);
+      setDemoMode(true);
+      setUser(userData);
+      return response;
+    } catch (err) {
+      setError(err.message || 'Demo login failed');
+      throw err;
+    }
   };
 
   // Logout function
@@ -88,11 +93,12 @@ export function AuthProvider({ children }) {
         await apiClient.logout();
       }
     } catch (err) {
-      console.error('Logout error:', err);
+      setError(err.message || 'Logout failed');
     } finally {
       setIsAuthenticated(false);
       setUser(null);
       setDemoMode(false);
+      apiClient.setToken(null);
     }
   };
 
@@ -107,6 +113,7 @@ export function AuthProvider({ children }) {
         const loginResponse = await apiClient.login(userData.email, userData.password);
         localStorage.setItem('access_token', loginResponse.access_token);
         setIsAuthenticated(true);
+        setDemoMode(false);
         const userDataFromApi = await apiClient.getCurrentUser();
         setUser(userDataFromApi);
       }

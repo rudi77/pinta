@@ -39,6 +39,14 @@ def _verification_url(token: str) -> str:
     base = settings.app_base_url.rstrip("/")
     return f"{base}/verify-email?token={token}"
 
+
+def _local_dev_auth_enabled(request: Request) -> bool:
+    """Allow frictionless auth only for local development."""
+    client_host = request.client.host if request.client else ""
+    return settings.debug or (
+        not settings.smtp_host and client_host in {"127.0.0.1", "::1", "localhost"}
+    )
+
 router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 security = HTTPBearer()
 logger = logging.getLogger(__name__)
@@ -76,9 +84,8 @@ async def register(
             detail=detail
         )
     
-    # Create new user with enhanced security. In debug mode (local dev) we
-    # auto-verify so the rest of the app is usable without an SMTP server;
-    # production requires an emailed verification link.
+    # Create new user with enhanced security. Local dev without SMTP auto-
+    # verifies so the app is usable; production requires an emailed link.
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
         username=user_data.username,
@@ -88,7 +95,7 @@ async def register(
         phone=user_data.phone,
         address=user_data.address,
         is_active=True,
-        is_verified=settings.debug,
+        is_verified=_local_dev_auth_enabled(request),
     )
 
     db.add(db_user)
@@ -223,6 +230,60 @@ async def login(
     logger.info(f"Successful login for user: {user.email} (ID: {user.id})")
     
     return tokens
+
+
+@router.post("/demo-login")
+async def demo_login(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Issue a real token for the local demo user.
+
+    This is intentionally limited to debug/local-without-SMTP setups so the
+    web demo exercises the authenticated backend instead of faking auth state.
+    """
+    if not _local_dev_auth_enabled(request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Demo login is only available in local development.",
+        )
+
+    email = "demo@example.com"
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user is None:
+        username_result = await db.execute(select(User).where(User.username == "demo"))
+        username = (
+            "demo"
+            if username_result.scalar_one_or_none() is None
+            else f"demo-{secrets.token_hex(4)}"
+        )
+        user = User(
+            username=username,
+            email=email,
+            hashed_password=get_password_hash(secrets.token_urlsafe(32)),
+            company_name="Demo Malerbetrieb",
+            is_active=True,
+            is_verified=True,
+            is_premium=True,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    else:
+        user.is_active = True
+        user.is_verified = True
+        user.is_premium = True
+        if not user.company_name:
+            user.company_name = "Demo Malerbetrieb"
+        await db.commit()
+        await db.refresh(user)
+
+    return create_token_pair({
+        "sub": user.email,
+        "user_id": user.id,
+        "username": user.username,
+    })
 
 @router.post("/refresh")
 async def refresh_token(

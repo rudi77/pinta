@@ -13,7 +13,7 @@ const Login = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/quick-quote');
+      navigate('/chat-quote');
     }
   }, [isAuthenticated, navigate]);
 
@@ -26,8 +26,12 @@ const Login = () => {
     }
   };
 
-  const handleDemoLogin = () => {
-    demoLogin();
+  const handleDemoLogin = async () => {
+    try {
+      await demoLogin();
+    } catch (error) {
+      // Error is already handled by useAuth
+    }
   };
 
   return (

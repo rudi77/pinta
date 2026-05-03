@@ -17,7 +17,6 @@ const QuoteDetail = () => {
         const data = await apiClient.getQuote(quoteId);
         setQuote(data);
       } catch (err) {
-        console.error('Failed to load quote:', err);
         setError('Fehler beim Laden des Angebots');
       } finally {
         setLoading(false);

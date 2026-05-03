@@ -17,7 +17,10 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        // 127.0.0.1 (not localhost) — on Windows, localhost can resolve to
+        // ::1 (IPv6) while uvicorn binds 0.0.0.0/127.0.0.1 (IPv4 only),
+        // which surfaces in the browser as a generic "Failed to fetch".
+        target: "http://127.0.0.1:8000",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, "/api/v1"),
       },

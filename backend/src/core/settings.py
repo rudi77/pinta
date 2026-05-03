@@ -68,8 +68,12 @@ class Settings(BaseSettings):
     # False so transient OpenAI hiccups don't break user-facing flows.
     ai_strict_mode: bool = False
     
-    # CORS
-    allowed_origins: Union[str, List[str]] = "http://localhost:5173,http://localhost:3000"
+    # CORS — keep frontend dev ports in sync with frontend/vite.config.js.
+    # Override via ALLOWED_ORIGINS env var for prod.
+    allowed_origins: Union[str, List[str]] = (
+        "http://localhost:5173,http://localhost:5183,http://localhost:3000,"
+        "http://127.0.0.1:5173,http://127.0.0.1:5183,http://127.0.0.1:3000"
+    )
     
     # Stripe
     stripe_secret_key: str = ""
@@ -110,7 +114,10 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(',') if origin.strip()]
         elif isinstance(v, list):
             return v
-        return "http://localhost:5173,http://localhost:3000"
+        return [
+            "http://localhost:5173", "http://localhost:5183", "http://localhost:3000",
+            "http://127.0.0.1:5173", "http://127.0.0.1:5183", "http://127.0.0.1:3000",
+        ]
     
     @computed_field
     @property

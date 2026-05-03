@@ -98,7 +98,7 @@ const QuickQuote = () => {
         URL.revokeObjectURL(url);
       }
     } catch (err) {
-      console.error('PDF download failed:', err);
+      setError(err.message || 'PDF konnte nicht erzeugt werden');
     }
   };
 
