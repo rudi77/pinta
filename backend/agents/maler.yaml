@@ -1,20 +1,27 @@
-# Maler-Agent — Pinta-eigene Config, geladen in src/agents/factory.py.
+# Maler-Agent — pytaskforce profile.
 #
-# Diese Datei ist KEIN pytaskforce-Profil (die liegen in pytaskforce' eigenem
-# configs-Verzeichnis). Wir lesen sie selbst mit PyYAML und reichen die
-# relevanten Felder (system_prompt etc.) inline an
-# ``AgentFactory.create_agent(...)`` durch. Vorteil: die Config ist mit Pinta
-# versioniert und patcht sich nicht gegen pytaskforce-Upgrades.
+# This file is loaded by pytaskforce's ProfileLoader after
+# ``register_profile_dir(...)`` runs in ``backend/src/agents/factory.py``.
+# Schema follows pytaskforce convention: top-level ``profile``, ``agent.*``,
+# ``tools:``, ``system_prompt:``. ``factory.create_agent(profile="maler")``
+# resolves and applies it.
 #
 # Zielgruppe: Maler/Handwerker, die per Telegram (Text/Voice/Foto)
 # Kostenvoranschläge für ihre Endkunden erstellen. Der Agent extrahiert
-# Fakten aus freiem Text, fragt gezielt nach Fehlendem und liefert ein
-# PDF, das der Maler selbst an den Endkunden weiterleitet.
+# Fakten aus freiem Text, fragt gezielt nach Fehlendem und liefert ein PDF,
+# das der Maler selbst an den Endkunden weiterleitet.
 
-name: maler
+profile: maler
+specialist: null    # No upstream specialist preset — custom system prompt only
+
 description: >
   Erfahrener Malermeister, der via Chat/Sprache Projektdaten aufnimmt,
   gezielt nach fehlenden Fakten fragt und Kostenvoranschläge erzeugt.
+
+# --- Agent runtime tuning ------------------------------------------------
+agent:
+  planning_strategy: native_react
+  max_steps: 12
 
 # --- LLM -----------------------------------------------------------------
 # pytaskforce nutzt LiteLLM. Modellauswahl erfolgt zentral via
@@ -149,9 +156,11 @@ system_prompt: |
 # Iter 6: python (Math) + search_materials (RAG) + generate_quote_pdf
 # (A4-PDF; Telegram-Runner versendet sie automatisch als Download).
 tools:
-  - python
-  - search_materials
-  - generate_quote_pdf
+  - python              # sandboxed arithmetic / dict construction
+  - multimedia          # photo vision + PDF text extraction
+  - search_materials    # RAG over MaterialPrice table
+  - save_quote_to_db    # persist Quote+Items in Pinta DB
+  - generate_quote_pdf  # render A4 PDF + insert Document row
 
 # --- Geplante Pinta-Tools (noch nicht aktiv) -----------------------------
 planned_tools:

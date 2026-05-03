@@ -4,10 +4,9 @@ This is the bridge between the pytaskforce agent and the central Quote /
 QuoteItem tables. The same quote that ends up as a PDF for Telegram should
 ALSO appear in the Web Dashboard and respect the quota machinery.
 
-We pull the active user from the agent factory's per-mission context
-(set by AgentService before each ``execute_stream``). For now: the agent
-calls this tool with the quote dict, we look up the user by id from a
-context-local variable, and INSERT one Quote row + N QuoteItem rows.
+We pull the active user from a ContextVar set by AgentService /
+routes/agent.py before each ``execute_stream``. ContextVars are
+task-local so the tool stays safe under concurrent missions.
 
 Returns ``{success: True, quote_id, quote_number}`` so the agent can
 mention the quote_number to the user ("Voranschlag KV-…-abc fertig.").
@@ -21,7 +20,7 @@ from datetime import datetime
 from typing import Any, Optional
 from uuid import uuid4
 
-from taskforce.core.interfaces.tools import ApprovalRiskLevel, ToolProtocol
+from taskforce.infrastructure.tools.base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
 
@@ -39,53 +38,37 @@ def _generate_quote_number() -> str:
     return f"KV-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:6]}"
 
 
-class SaveQuoteToDbTool(ToolProtocol):
+class SaveQuoteToDbTool(BaseTool):
     """Persist the agent's final quote into the Pinta `quotes` table."""
 
-    @property
-    def name(self) -> str:
-        return "save_quote_to_db"
-
-    @property
-    def description(self) -> str:
-        return (
-            "Speichert den fertigen Kostenvoranschlag in der zentralen "
-            "Pinta-Datenbank, sodass er auch im Web-Dashboard sichtbar ist. "
-            "RUFE DIESES TOOL AUF, sobald das Quote-Dict komplett ist UND "
-            "BEVOR du generate_quote_pdf aufrufst — dann landen Quote "
-            "(mit quote_number), Items, Customer-Felder konsistent in der DB. "
-            "Liefert die quote_number zurück, die du dem Nutzer mitteilen "
-            "kannst."
-        )
-
-    @property
-    def parameters_schema(self) -> dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "quote": {
-                    "type": "object",
-                    "description": (
-                        "Komplettes Quote-Dict: project_title (Pflicht), items "
-                        "(Liste mit description/quantity/unit/unit_price/total_price/category), "
-                        "subtotal, vat_amount, total_amount, notes, recommendations, "
-                        "optional: customer_name, customer_email, customer_phone, "
-                        "customer_address, project_description."
-                    ),
-                },
+    tool_name = "save_quote_to_db"
+    tool_description = (
+        "Speichert den fertigen Kostenvoranschlag in der zentralen "
+        "Pinta-Datenbank, sodass er auch im Web-Dashboard sichtbar ist. "
+        "RUFE DIESES TOOL AUF, sobald das Quote-Dict komplett ist UND "
+        "BEVOR du generate_quote_pdf aufrufst — dann landen Quote "
+        "(mit quote_number), Items, Customer-Felder konsistent in der DB. "
+        "Liefert die quote_number zurück, die du dem Nutzer mitteilen "
+        "kannst."
+    )
+    tool_parameters_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "quote": {
+                "type": "object",
+                "description": (
+                    "Komplettes Quote-Dict: project_title (Pflicht), items "
+                    "(Liste mit description/quantity/unit/unit_price/total_price/category), "
+                    "subtotal, vat_amount, total_amount, notes, recommendations, "
+                    "optional: customer_name, customer_email, customer_phone, "
+                    "customer_address, project_description."
+                ),
             },
-            "required": ["quote"],
-        }
+        },
+        "required": ["quote"],
+    }
 
-    @property
-    def requires_approval(self) -> bool:
-        return False
-
-    @property
-    def approval_risk_level(self) -> ApprovalRiskLevel:
-        return ApprovalRiskLevel.LOW
-
-    async def execute(
+    async def _execute(
         self, quote: dict[str, Any] | None = None, **_ignored: Any,
     ) -> dict[str, Any]:
         if not isinstance(quote, dict) or not quote:

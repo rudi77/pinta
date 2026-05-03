@@ -22,7 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from taskforce.core.interfaces.tools import ApprovalRiskLevel, ToolProtocol
+from taskforce.infrastructure.tools.base_tool import BaseTool
 
 logger = logging.getLogger(__name__)
 
@@ -244,57 +244,41 @@ def _render_pdf(quote: dict, output_path: Path) -> None:
     doc.build(story)
 
 
-class GenerateQuotePdfTool(ToolProtocol):
+class GenerateQuotePdfTool(BaseTool):
     """Render the agent's quote dict into a downloadable A4 PDF."""
 
-    @property
-    def name(self) -> str:
-        return "generate_quote_pdf"
-
-    @property
-    def description(self) -> str:
-        return (
-            "Erzeugt ein professionelles A4-PDF des fertigen Kostenvoranschlags und "
-            "gibt den Datei-Pfad zurück. RUFE DIESES TOOL AUF, sobald du den Quote "
-            "fertig kalkuliert hast (mit subtotal, vat_amount, total_amount, items). "
-            "Das PDF wird vom Telegram-Bot automatisch dem Nutzer als Download geschickt."
-        )
-
-    @property
-    def parameters_schema(self) -> dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "quote": {
-                    "type": "object",
-                    "description": (
-                        "Das vollständige Quote-Objekt. Felder: project_title, items "
-                        "(Liste mit description/quantity/unit/unit_price/total_price/category), "
-                        "subtotal, vat_amount, total_amount, notes, recommendations, "
-                        "optional: quote_number, customer_name, customer_address, "
-                        "customer_email, customer_phone, project_description."
-                    ),
-                },
-                "filename_hint": {
-                    "type": "string",
-                    "description": (
-                        "Optional: Hinweis für den Dateinamen, z.B. 'schlafzimmer-streichen'. "
-                        "Wird zu einem URL-sicheren Slug bereinigt."
-                    ),
-                },
+    tool_name = "generate_quote_pdf"
+    tool_description = (
+        "Erzeugt ein professionelles A4-PDF des fertigen Kostenvoranschlags und "
+        "gibt den Datei-Pfad zurück. RUFE DIESES TOOL AUF, sobald du den Quote "
+        "fertig kalkuliert hast (mit subtotal, vat_amount, total_amount, items). "
+        "Das PDF wird vom Telegram-Bot automatisch dem Nutzer als Download geschickt."
+    )
+    tool_parameters_schema: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "quote": {
+                "type": "object",
+                "description": (
+                    "Das vollständige Quote-Objekt. Felder: project_title, items "
+                    "(Liste mit description/quantity/unit/unit_price/total_price/category), "
+                    "subtotal, vat_amount, total_amount, notes, recommendations, "
+                    "optional: quote_number, customer_name, customer_address, "
+                    "customer_email, customer_phone, project_description."
+                ),
+            },
+            "filename_hint": {
+                "type": "string",
+                "description": (
+                    "Optional: Hinweis für den Dateinamen, z.B. 'schlafzimmer-streichen'. "
+                    "Wird zu einem URL-sicheren Slug bereinigt."
+                ),
+            },
             },
             "required": ["quote"],
         }
 
-    @property
-    def requires_approval(self) -> bool:
-        return False
-
-    @property
-    def approval_risk_level(self) -> ApprovalRiskLevel:
-        return ApprovalRiskLevel.LOW
-
-    async def execute(
+    async def _execute(
         self,
         quote: dict[str, Any] | None = None,
         filename_hint: str | None = None,
