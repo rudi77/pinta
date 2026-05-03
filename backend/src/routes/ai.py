@@ -156,94 +156,167 @@ async def quote_suggestions(
 ):
     return {"suggested_materials": [], "labor_breakdown": {}, "alternative_options": []}
 
+async def _run_agent_for_quote(
+    user: User, db: AsyncSession, mission_text: str, *, channel: str = "web",
+) -> dict:
+    """Common entry point for the legacy AI routes — runs the unified agent
+    and returns the freshly persisted Quote+items as plain dicts.
+
+    The agent's save_quote_to_db tool writes the Quote/QuoteItem rows for
+    us; here we just reload the latest one for this user and shape it into
+    the legacy response schema.
+    """
+    from src.agents.tools.save_quote_to_db import (
+        current_conversation_id,
+        current_user_id,
+    )
+    from src.services.agent_service import agent_service
+
+    user_token = current_user_id.set(user.id)
+    conv_token = current_conversation_id.set(None)
+    try:
+        result = await agent_service.chat(
+            db, user, mission_text, channel=channel,
+        )
+        current_conversation_id.set(result["conversation_id"])
+    finally:
+        current_user_id.reset(user_token)
+        current_conversation_id.reset(conv_token)
+
+    # The agent (via save_quote_to_db) just inserted a Quote row.
+    # Reload the latest one for this user.
+    latest_q = (await db.execute(
+        select(Quote)
+        .where(Quote.user_id == user.id)
+        .order_by(Quote.id.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+
+    items_rows: list[QuoteItem] = []
+    if latest_q is not None:
+        items_rows = list((await db.execute(
+            select(QuoteItem)
+            .where(QuoteItem.quote_id == latest_q.id)
+            .order_by(QuoteItem.position)
+        )).scalars().all())
+
+    return {
+        "agent_result": result,
+        "quote": latest_q,
+        "items": items_rows,
+    }
+
+
 @router.post("/quick-quote", response_model=QuickQuoteResponse)
 async def create_quick_quote(
     request: QuickQuoteRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Generate a complete quote from minimal input in a single step (MVP Quick Quote)."""
-    try:
-        logger.info(f"Quick quote request from user {current_user.id}: {request.service_description[:80]}")
+    """Single-step quote (legacy schema, now backed by the unified agent).
 
-        # Check user quota
+    The agent owns the prompt, the calculator, the PDF generation and the
+    DB persistence. This route is a thin shape-adapter that turns the
+    Quick-Quote request into a free-form mission and reads the resulting
+    Quote back as the legacy QuickQuoteResponse.
+    """
+    try:
+        logger.info(
+            f"Quick quote (agent) request from user {current_user.id}: "
+            f"{request.service_description[:80]}"
+        )
+
         from src.routes.quotes import check_user_quota
         has_quota = await check_user_quota(current_user, db)
         if not has_quota:
             raise HTTPException(
                 status_code=429,
-                detail="Monatliches Kontingent erschöpft. Upgraden Sie auf Premium für unbegrenzte Angebote."
+                detail=(
+                    "Monatliches Kontingent erschöpft. Upgraden Sie auf "
+                    "Premium für unbegrenzte Angebote."
+                )
             )
 
-        ai_result = await ai_service.generate_quick_quote(
-            service_description=request.service_description,
-            area=request.area,
-            additional_info=request.additional_info,
-            **_resolve_cost_params(request, current_user)
-        )
-
-        # Save quote to DB
-        quote = Quote(
-            quote_number=generate_quote_number(),
-            user_id=current_user.id,
-            customer_name=request.customer_name or "",
-            project_title=ai_result.get("project_title", "Malerarbeiten"),
-            project_description=request.service_description,
-            total_amount=ai_result.get("total_amount", 0),
-            labor_hours=0,
-            hourly_rate=0,
-            material_cost=0,
-            additional_costs=0,
-            status="draft",
-            created_by_ai=True,
-            generation_method="ai"
-        )
-        db.add(quote)
-        await db.flush()
-
-        # Save quote items
-        for item_data in ai_result.get("items", []):
-            db_item = QuoteItem(
-                quote_id=quote.id,
-                position=item_data.get("position", 0),
-                description=item_data.get("description", ""),
-                quantity=item_data.get("quantity", 0),
-                unit=item_data.get("unit", "Stk"),
-                unit_price=item_data.get("unit_price", 0),
-                total_price=item_data.get("total_price", 0),
-                work_type=item_data.get("category", "labor")
+        # Build a mission the agent can act on. We bake the cost params
+        # (hourly_rate, material_cost_markup) directly into the brief so the
+        # agent's faustregeln respect them.
+        cost_params = _resolve_cost_params(request, current_user)
+        mission_lines = [request.service_description]
+        if request.area:
+            mission_lines.append(f"Fläche/Umfang: {request.area}")
+        if request.additional_info:
+            mission_lines.append(f"Zusatzinfo: {request.additional_info}")
+        if cost_params.get("hourly_rate") is not None:
+            mission_lines.append(f"Stundensatz: {cost_params['hourly_rate']:.2f} EUR/h netto.")
+        if cost_params.get("material_cost_markup") is not None:
+            mission_lines.append(
+                f"Material-Aufschlag: {cost_params['material_cost_markup']:.1f}%."
             )
-            db.add(db_item)
+        if request.customer_name:
+            mission_lines.append(f"Kunde: {request.customer_name}")
+        mission_lines.append(
+            "Erzeuge mir den Voranschlag, ruf save_quote_to_db UND "
+            "generate_quote_pdf auf."
+        )
 
-        await db.commit()
-        await db.refresh(quote)
+        run = await _run_agent_for_quote(
+            current_user, db, "\n".join(mission_lines), channel="web",
+        )
+        quote = run["quote"]
+        items = run["items"]
+
+        if quote is None:
+            # Agent didn't persist — likely it asked a follow-up question
+            # instead of producing a quote. Return a minimal envelope so
+            # the frontend can show the agent's text.
+            agent_msg = run["agent_result"].get("final_message", "")
+            return QuickQuoteResponse(
+                quote_id=0,
+                quote_number="",
+                project_title="(noch kein Voranschlag)",
+                items=[],
+                subtotal=0.0,
+                vat_amount=0.0,
+                total_amount=0.0,
+                notes=agent_msg or "Der Agent hat keinen Voranschlag erzeugt.",
+                recommendations=[],
+            )
+
+        subtotal_net = sum(float(i.total_price or 0) for i in items)
+        vat_amount = round(subtotal_net * 0.19, 2)
+        total_brutto = round(subtotal_net + vat_amount, 2)
 
         return QuickQuoteResponse(
             quote_id=quote.id,
             quote_number=quote.quote_number,
-            project_title=ai_result.get("project_title", "Malerarbeiten"),
+            project_title=quote.project_title,
             items=[
                 QuickQuoteItemResponse(
-                    position=item.get("position", i + 1),
-                    description=item.get("description", ""),
-                    quantity=item.get("quantity", 0),
-                    unit=item.get("unit", "Stk"),
-                    unit_price=item.get("unit_price", 0),
-                    total_price=item.get("total_price", 0),
-                    category=item.get("category", "labor")
+                    position=int(item.position or i + 1),
+                    description=item.description or "",
+                    quantity=float(item.quantity or 0),
+                    unit=item.unit or "Stk",
+                    unit_price=float(item.unit_price or 0),
+                    total_price=float(item.total_price or 0),
+                    category=str(item.work_type or "labor"),
                 )
-                for i, item in enumerate(ai_result.get("items", []))
+                for i, item in enumerate(items)
             ],
-            subtotal=ai_result.get("subtotal", 0),
-            vat_amount=ai_result.get("vat_amount", 0),
-            total_amount=ai_result.get("total_amount", 0),
-            notes=ai_result.get("notes", ""),
-            recommendations=ai_result.get("recommendations", [])
+            subtotal=round(subtotal_net, 2),
+            vat_amount=vat_amount,
+            total_amount=round(quote.total_amount or total_brutto, 2),
+            notes=quote.project_description or "",
+            recommendations=[],
         )
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error creating quick quote: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Fehler bei der Angebotserstellung: {str(e)}")
+        logger.error(f"Error creating quick quote (agent): {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fehler bei der Angebotserstellung: {str(e)}",
+        )
 
 @router.post("/ask-question", response_model=AIQuestionResponse)
 async def ask_follow_up_question(
