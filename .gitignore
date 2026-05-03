@@ -224,4 +224,5 @@ iteration_logs/**/_console*.log
 # pytaskforce work directories — agent state per session, regenerated per run
 .taskforce_smoke/
 backend/.taskforce_maler/
+backend/.taskforce_smoke/
 traces/

@@ -33,6 +33,7 @@ from pathlib import Path
 from src.agents.factory import create_maler_agent, warm_factory
 from src.agents.taskforce_setup import ensure_litellm_env_for_taskforce
 from src.core.settings import settings
+from src.telegram import conversation_log
 from src.telegram.state import get_session_for_chat, reset_session_for_chat
 
 # Where the generate_quote_pdf tool writes finished PDFs.
@@ -151,7 +152,7 @@ class _NoOpPendingStore:
         return None
 
 
-def _make_inbound_handler(outbound_sender: Any):
+def _make_inbound_handler(outbound_sender: Any, bot_token: str):
     """Build the per-message handler closing over the outbound sender."""
 
     async def handle(
@@ -167,43 +168,64 @@ def _make_inbound_handler(outbound_sender: Any):
         cmd = stripped.lower().split()[0] if stripped else ""
         if cmd in {"/neu", "/new", "/start", "/reset"}:
             reset_session_for_chat(chat_id_int)
+            conversation_log.clear(chat_id)
             await outbound_sender.send(
                 recipient_id=chat_id,
                 message=(
-                    "Servus! Ich bin dein Maler-Agent. Beschreib mir das Projekt "
-                    "(Räume, Flächen, Vorarbeiten, Material, Termin), und ich "
-                    "mach dir einen Kostenvoranschlag.\n\n"
-                    "Befehle:\n"
-                    "  /neu — neuen Voranschlag starten\n"
+                    "Servus, ich bin Manfred — dein Maler-Meister-Agent. 👷\n\n"
+                    "Erzähl mir vom Projekt: was, wo, wieviel Quadratmeter, "
+                    "in welchem Zustand, bis wann. Foto vom Raum darfst du "
+                    "auch direkt schicken, das hilft beim Schätzen.\n\n"
+                    "Wenn alles klar ist, schmeiß ich dir einen "
+                    "Kostenvoranschlag als PDF zurück.\n\n"
+                    "Befehle: /neu — frischer Auftrag"
                 ),
             )
             return
 
         get_session_for_chat(chat_id_int)  # ensure session exists
 
-        # Multimodal: if a photo arrived, prepend a marker so the agent picks
-        # it up. Real vision tool wiring follows in a later iteration.
-        mission = stripped or "Bitte analysiere die mitgesendete Datei."
+        # Build the mission. Attachments come from the TelegramPoller already
+        # downloaded — photos arrive with a temp ``file_path``, documents the
+        # same. We tell the agent the local path and which tool to use, so it
+        # can call ``multimedia`` itself to inspect the file.
+        new_user_text = stripped or "Der Nutzer hat eine Datei ohne Begleittext geschickt."
         if attachments:
-            n = len(attachments)
-            mission = (
-                f"[Hinweis: {n} Bild/Dokument vom Nutzer mitgesendet — "
-                "visual_estimate-Tool ist noch nicht aktiv, schätze textuell "
-                f"oder frag gezielt nach.]\n\n{mission}"
-            )
+            attach_lines = ["Der Nutzer hat folgende Datei(en) mitgeschickt — "
+                            "lies sie mit dem `multimedia`-Tool ein, bevor du "
+                            "antwortest:"]
+            for att in attachments:
+                fp = att.get("file_path")
+                fn = att.get("file_name") or "datei"
+                kind = att.get("type") or "file"
+                if fp:
+                    attach_lines.append(f"- {kind}: `{fp}` (Dateiname: {fn})")
+                else:
+                    attach_lines.append(f"- {kind}: (kein Pfad — Foto nur als data_url)")
+            new_user_text = "\n".join(attach_lines) + "\n\n" + new_user_text
+
+        # Inject prior turns so the agent has chat-level memory.
+        mission = conversation_log.build_mission_with_history(chat_id, new_user_text)
 
         logger.info(
-            "telegram.mission_start chat=%s sender=%s len=%s",
+            "telegram.mission_start chat=%s sender=%s len=%s attachments=%s",
             chat_id, sender_id, len(mission),
+            len(attachments) if attachments else 0,
         )
+
+        # Persist the user's turn now (before the agent runs) so a crash
+        # mid-mission still leaves a coherent transcript.
+        conversation_log.append(chat_id, "user", new_user_text)
 
         agent = await create_maler_agent()
         try:
-            # Send a quick ack so the user sees the bot working — agent
-            # execution can take 20-40s for a full quote.
-            await outbound_sender.send(
-                recipient_id=chat_id,
-                message="✏️ Moment, ich rechne...",
+            # Show "is typing…" instead of a separate text message — far less
+            # spammy and adapts naturally to short replies vs long quote
+            # generations. We re-trigger it during the run because Telegram
+            # auto-clears typing after ~5s.
+            typing_task = asyncio.create_task(
+                _typing_loop(bot_token, chat_id),
+                name=f"telegram-typing-{chat_id}",
             )
 
             # Snapshot existing PDFs so we can detect new ones the agent
@@ -255,12 +277,20 @@ def _make_inbound_handler(outbound_sender: Any):
                         chat_id, pdf_path,
                     )
 
+            typing_task.cancel()
+            try:
+                await typing_task
+            except (asyncio.CancelledError, Exception):
+                pass
+
             reply = _humanize_reply(final_message or "")
             if not reply.strip():
                 reply = (
-                    "Ich konnte die Anfrage gerade nicht beantworten. "
-                    "Bitte formulier sie noch mal anders oder schick /neu."
+                    "Hmm, da ist mir gerade die Antwort verloren gegangen. "
+                    "Frag nochmal — oder schick /neu, dann starten wir frisch."
                 )
+            # Persist the assistant turn so the next message has it as context.
+            conversation_log.append(chat_id, "assistant", reply)
             # Telegram message limit is 4096 chars — chunk if needed
             for chunk in _chunk(reply, 3800):
                 await outbound_sender.send(recipient_id=chat_id, message=chunk)
@@ -315,6 +345,32 @@ def _make_inbound_handler(outbound_sender: Any):
                 pass
 
     return handle
+
+
+async def _typing_loop(bot_token: str, chat_id: str) -> None:
+    """Repeatedly fire ``sendChatAction: typing`` so Telegram keeps the
+    "is typing…" indicator visible until the agent's reply lands.
+
+    Telegram auto-clears the indicator after ~5 seconds; we re-trigger every
+    4 seconds. Cancelled by the caller right before sending the actual reply.
+    """
+    import aiohttp
+    url = f"https://api.telegram.org/bot{bot_token}/sendChatAction"
+    try:
+        async with aiohttp.ClientSession() as session:
+            while True:
+                try:
+                    async with session.post(
+                        url,
+                        json={"chat_id": chat_id, "action": "typing"},
+                        timeout=aiohttp.ClientTimeout(total=5),
+                    ) as resp:
+                        await resp.read()
+                except Exception:
+                    pass  # transient network errors are fine — keep looping
+                await asyncio.sleep(4)
+    except asyncio.CancelledError:
+        return
 
 
 def _extract_pdf_path(event_data: dict) -> str | None:
@@ -391,7 +447,7 @@ async def run_bot_forever() -> None:
     )
 
     outbound = TelegramOutboundSender(token)
-    handler = _make_inbound_handler(outbound)
+    handler = _make_inbound_handler(outbound, bot_token=token)
     poller = TelegramPoller(
         bot_token=token,
         pending_store=_NoOpPendingStore(),

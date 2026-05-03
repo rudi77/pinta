@@ -81,9 +81,43 @@ class SearchMaterialsTool(ToolProtocol):
         **_ignored: Any,
     ) -> dict[str, Any]:
         # Local imports keep the heavy deps (sqlalchemy, openai) lazy
-        from src.core.database import AsyncSessionLocal
+        from sqlalchemy import inspect as sa_inspect
+        from src.core.database import AsyncSessionLocal, engine
         from src.services.ai_service import AIService
         from src.services.rag_service import RagService
+
+        # Pre-check: if the material_prices table does not exist (DB never
+        # seeded), short-circuit with a friendly success+empty rather than
+        # let SQLAlchemy raise an OperationalError on every call. The agent
+        # would otherwise stall in repeated retries, which trips the Azure
+        # content filter and burns tokens for nothing.
+        try:
+            def _check(sync_conn) -> bool:
+                return sa_inspect(sync_conn).has_table("material_prices")
+            async with engine.begin() as conn:
+                table_exists = await conn.run_sync(_check)
+            if not table_exists:
+                return {
+                    "success": True,
+                    "count": 0,
+                    "materials": [],
+                    "note": (
+                        "Materialdatenbank ist noch nicht initialisiert "
+                        "(material_prices-Tabelle fehlt). Nutze die Faustregeln "
+                        "aus dem System-Prompt — KEIN weiteres search_materials "
+                        "in dieser Mission aufrufen."
+                    ),
+                }
+        except Exception as exc:
+            return {
+                "success": True,
+                "count": 0,
+                "materials": [],
+                "note": (
+                    f"Materialdatenbank nicht erreichbar ({type(exc).__name__}). "
+                    "Nutze Faustregeln und ruf das Tool nicht erneut auf."
+                ),
+            }
 
         try:
             top_k = max(1, min(int(top_k or 5), 10))
@@ -105,9 +139,11 @@ class SearchMaterialsTool(ToolProtocol):
             }
         except Exception as exc:  # pragma: no cover — surfaced to the agent
             return {
-                "success": False,
-                "error": f"search_materials failed: {type(exc).__name__}: {exc}",
-                "error_type": type(exc).__name__,
-                "materials": [],
+                "success": True,  # don't propagate as failure -> avoids stall
                 "count": 0,
+                "materials": [],
+                "note": (
+                    f"search_materials hatte einen Fehler ({type(exc).__name__}). "
+                    "Ich nutze stattdessen Faustregeln und rufe das Tool nicht erneut auf."
+                ),
             }

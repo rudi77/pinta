@@ -244,10 +244,22 @@ class GenerateQuotePdfTool(ToolProtocol):
 
     async def execute(
         self,
-        quote: dict[str, Any],
+        quote: dict[str, Any] | None = None,
         filename_hint: str | None = None,
         **_ignored: Any,
     ) -> dict[str, Any]:
+        if not isinstance(quote, dict) or not quote:
+            return {
+                "success": False,
+                "error": (
+                    "quote-Argument fehlt. Bitte ruf das Tool mit dem "
+                    "vollständigen Quote-Dict auf: "
+                    "generate_quote_pdf(quote={...}, filename_hint='...'). "
+                    "Das Quote-Dict braucht mindestens project_title, items, "
+                    "subtotal, vat_amount, total_amount."
+                ),
+                "error_type": "MissingArgument",
+            }
         try:
             _QUOTES_DIR.mkdir(parents=True, exist_ok=True)
             slug = _slugify(filename_hint or quote.get("project_title", "quote"))

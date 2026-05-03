@@ -127,12 +127,13 @@ async def create_maler_agent(*, tools: Optional[list[str]] = None) -> Any:
     factory = _get_factory()
     cfg = _load_config()
 
-    # Iter 6: python (math) + search_materials (RAG) + generate_quote_pdf
-    # (rendert den Quote als A4-PDF; Telegram-Runner versendet die Datei
-    # automatisch als Download, wenn das Tool erfolgreich gelaufen ist).
+    # Iter 7: python + search_materials + generate_quote_pdf
+    #         + multimedia (Bilder/PDF-Vision via pytaskforce native tool).
+    # multimedia liest base64-Bilder + PDFs, sodass der Agent Telegram-
+    # Photos und mitgesendete Pläne/Rechnungen interpretieren kann.
     tool_list = (
         tools if tools is not None
-        else ["python", "search_materials", "generate_quote_pdf"]
+        else ["python", "search_materials", "generate_quote_pdf", "multimedia"]
     )
 
     WORK_DIR.mkdir(parents=True, exist_ok=True)
