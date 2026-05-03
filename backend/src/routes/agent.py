@@ -78,6 +78,7 @@ class AgentChatResponse(BaseModel):
     humanized_message: str  # cleaned-of-JSON version safe for chat UIs
     pdf_url: Optional[str] = None
     pdf_filename: Optional[str] = None
+    quote_id: Optional[int] = None
     quote_number: Optional[str] = None
     status: str
 
@@ -228,7 +229,11 @@ async def agent_chat(
         humanized_message=_humanize(result.get("final_message", "")),
         pdf_url=pdf_url,
         pdf_filename=pdf_filename,
-        quote_number=_quote_number_from_message(result.get("final_message", "")),
+        quote_id=result.get("quote_id"),
+        quote_number=(
+            result.get("quote_number")
+            or _quote_number_from_message(result.get("final_message", ""))
+        ),
         status=result.get("status", "completed"),
     )
 
@@ -427,7 +432,11 @@ async def bot_chat(
         humanized_message=_humanize(result.get("final_message", "")),
         pdf_url=pdf_url,
         pdf_filename=pdf_filename,
-        quote_number=_quote_number_from_message(result.get("final_message", "")),
+        quote_id=result.get("quote_id"),
+        quote_number=(
+            result.get("quote_number")
+            or _quote_number_from_message(result.get("final_message", ""))
+        ),
         status=result.get("status", "completed"),
     )
 

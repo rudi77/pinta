@@ -140,12 +140,26 @@ const ChatQuoteWizard = ({ onNavigate }) => {
         }));
       const response = await apiClient.chatWithAgent(userMessage, attachments);
       const assistantText = response.humanized_message || response.final_message || 'Keine Antwort generiert.';
+      const producedQuote = response.quote_id || response.pdf_url || response.quote_number;
 
       setMessages(prev => [...prev, {
         role: 'assistant',
         content: assistantText,
-        type: 'text'
+        type: 'text',
+        quote: producedQuote ? {
+          id: response.quote_id,
+          number: response.quote_number,
+          pdfUrl: response.pdf_url,
+        } : null,
       }]);
+
+      if (producedQuote) {
+        setCurrentQuote({
+          id: response.quote_id,
+          number: response.quote_number,
+          pdfUrl: response.pdf_url,
+        });
+      }
 
       setConversationHistory(prev => [...prev, {
         role: 'assistant',
@@ -258,9 +272,39 @@ const ChatQuoteWizard = ({ onNavigate }) => {
                     <span>{message.content}</span>
                   </div>
                 ) : (
-                  <p className={message.type === 'error' ? 'text-red-500' : ''}>
-                    {message.content}
-                  </p>
+                  <div className="space-y-3">
+                    <p className={message.type === 'error' ? 'text-red-500' : ''}>
+                      {message.content}
+                    </p>
+                    {message.quote && (
+                      <div className="rounded-lg border bg-green-50 p-3 text-sm text-green-900">
+                        <p className="font-medium">
+                          Angebot {message.quote.number || `#${message.quote.id}`} ist fertig.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {message.quote.pdfUrl && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => window.open(apiClient.getAgentPdfUrl(message.quote.pdfUrl), '_blank', 'noopener,noreferrer')}
+                            >
+                              PDF öffnen
+                            </Button>
+                          )}
+                          {message.quote.id && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => window.location.assign(`/quotes/${message.quote.id}`)}
+                            >
+                              Angebot anzeigen
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </Card>
             ))}
@@ -378,6 +422,35 @@ const ChatQuoteWizard = ({ onNavigate }) => {
         {error && (
           <div className="p-4 text-red-500 text-sm">
             {error}
+          </div>
+        )}
+
+        {currentQuote && (
+          <div className="p-4 border-t bg-white">
+            <div className="max-w-xl mx-auto rounded-lg border p-4">
+              <p className="font-medium">
+                Letztes Agent-Ergebnis: {currentQuote.number || `Angebot #${currentQuote.id}`}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {currentQuote.pdfUrl && (
+                  <Button
+                    type="button"
+                    onClick={() => window.open(apiClient.getAgentPdfUrl(currentQuote.pdfUrl), '_blank', 'noopener,noreferrer')}
+                  >
+                    PDF öffnen
+                  </Button>
+                )}
+                {currentQuote.id && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => window.location.assign(`/quotes/${currentQuote.id}`)}
+                  >
+                    Im Dashboard anzeigen
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>

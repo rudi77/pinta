@@ -4,6 +4,7 @@
 const resolvedBase = (import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : '';
 const apiPrefix = resolvedBase ? '/api/v1' : '/api'
 const API_BASE_URL = (resolvedBase || '') + apiPrefix;
+const PUBLIC_API_BASE_URL = resolvedBase ? `${resolvedBase}/api/v1` : '/api';
 
 class ApiClient {
   constructor() {
@@ -202,6 +203,13 @@ class ApiClient {
         channel: 'web',
       }),
     });
+  }
+
+  getAgentPdfUrl(pdfUrl) {
+    if (!pdfUrl) return null;
+    if (pdfUrl.startsWith('http')) return pdfUrl;
+    const path = pdfUrl.replace(/^\/api\/v1/, '');
+    return `${PUBLIC_API_BASE_URL}${path}`;
   }
 
   // Health check
