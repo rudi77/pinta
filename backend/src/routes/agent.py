@@ -8,6 +8,13 @@ Endpoints:
   GET  /api/v1/agent/conversations/{id}/messages
   POST /api/v1/agent/reset           archive active conversation
   GET  /api/v1/agent/pdf/{name}      download a generated quote PDF
+
+Bot adapter sub-namespace (auth = X-Bot-Service-Token + X-Channel /
+X-External-Id headers, NOT user JWT):
+  POST /api/v1/agent/bot/chat        chat through bot, auto-creates shadow user
+  POST /api/v1/agent/bot/reset       /neu over bot
+  POST /api/v1/agent/bot/link        consume a linking_token issued by the Web
+  POST /api/v1/agent/linking-token   user-side: issue a token to paste into bot
 """
 from __future__ import annotations
 
@@ -17,7 +24,7 @@ import re
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -29,8 +36,14 @@ from src.agents.tools.save_quote_to_db import (
 )
 from src.core.database import get_db
 from src.core.security import get_current_user
+from src.core.settings import settings
 from src.models.models import Conversation, ConversationMessage, User
 from src.services.agent_service import agent_service
+from src.services.channel_link_service import (
+    consume_linking_token,
+    issue_linking_token,
+    resolve_or_create_shadow_user,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
@@ -334,6 +347,150 @@ async def reset_conversation(
         "success": True,
         "new_conversation_id": fresh.id,
         "channel": fresh.channel,
+    }
+
+
+# ── bot adapter sub-namespace ────────────────────────────────────────────
+
+class BotChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=8000)
+    attachments: list[AgentAttachment] = Field(default_factory=list)
+    display_name: Optional[str] = None
+
+
+class BotLinkRequest(BaseModel):
+    token: str = Field(..., min_length=8, max_length=64)
+    display_name: Optional[str] = None
+
+
+async def get_bot_user(
+    x_bot_service_token: str = Header(..., alias="X-Bot-Service-Token"),
+    x_channel: str = Header(..., alias="X-Channel"),
+    x_external_id: str = Header(..., alias="X-External-Id"),
+    x_display_name: Optional[str] = Header(default=None, alias="X-Display-Name"),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Auth dependency for bot adapter calls.
+
+    Verifies the shared bot-service token, then resolves
+    ``(channel, external_id)`` to a Pinta user. Auto-creates a shadow user
+    on first encounter so the bot can start chatting immediately; the user
+    can later upgrade via ``/api/v1/agent/bot/link``.
+    """
+    expected = (settings.bot_service_token or "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Bot service token not configured on the backend.",
+        )
+    if not x_bot_service_token or x_bot_service_token != expected:
+        raise HTTPException(status_code=401, detail="Invalid bot service token.")
+    if not x_channel or not x_external_id:
+        raise HTTPException(
+            status_code=400,
+            detail="X-Channel and X-External-Id headers are required.",
+        )
+    user, _link, _created = await resolve_or_create_shadow_user(
+        db,
+        channel=x_channel.strip().lower(),
+        external_id=x_external_id.strip(),
+        display_name=x_display_name.strip() if x_display_name else None,
+    )
+    return user
+
+
+@router.post("/bot/chat", response_model=AgentChatResponse)
+async def bot_chat(
+    request: BotChatRequest,
+    x_channel: str = Header(..., alias="X-Channel"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_bot_user),
+) -> AgentChatResponse:
+    attachments_block = _build_attachments_block(request.attachments)
+    user_token = current_user_id.set(user.id)
+    conv_token = current_conversation_id.set(None)
+    try:
+        result = await agent_service.chat(
+            db, user, request.message,
+            channel=x_channel.strip().lower(),
+            attachments_block=attachments_block,
+        )
+        current_conversation_id.set(result["conversation_id"])
+    finally:
+        current_user_id.reset(user_token)
+        current_conversation_id.reset(conv_token)
+
+    pdf_url, pdf_filename = _pdf_response_fields(result.get("pdf_path"))
+    return AgentChatResponse(
+        conversation_id=result["conversation_id"],
+        final_message=result.get("final_message", ""),
+        humanized_message=_humanize(result.get("final_message", "")),
+        pdf_url=pdf_url,
+        pdf_filename=pdf_filename,
+        quote_number=_quote_number_from_message(result.get("final_message", "")),
+        status=result.get("status", "completed"),
+    )
+
+
+@router.post("/bot/reset")
+async def bot_reset(
+    x_channel: str = Header(..., alias="X-Channel"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_bot_user),
+) -> dict[str, Any]:
+    fresh = await agent_service.reset(db, user, channel=x_channel.strip().lower())
+    return {"success": True, "new_conversation_id": fresh.id}
+
+
+@router.post("/bot/link")
+async def bot_link(
+    request: BotLinkRequest,
+    x_channel: str = Header(..., alias="X-Channel"),
+    x_external_id: str = Header(..., alias="X-External-Id"),
+    x_bot_service_token: str = Header(..., alias="X-Bot-Service-Token"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Link a bot channel identity to a real Pinta user via a one-shot token."""
+    expected = (settings.bot_service_token or "").strip()
+    if not expected or x_bot_service_token != expected:
+        raise HTTPException(status_code=401, detail="Invalid bot service token.")
+
+    real_user = await consume_linking_token(
+        db,
+        token=request.token,
+        channel=x_channel.strip().lower(),
+        external_id=x_external_id.strip(),
+        display_name=request.display_name,
+    )
+    if real_user is None:
+        return {
+            "success": False,
+            "error": "Token unbekannt oder abgelaufen.",
+        }
+    return {
+        "success": True,
+        "user_id": real_user.id,
+        "username": real_user.username,
+    }
+
+
+@router.post("/linking-token")
+async def issue_linking_token_endpoint(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    channel: str = "telegram",
+) -> dict[str, Any]:
+    """Web-side: issue a 24h token the user pastes into Telegram via /link <token>."""
+    token, expires = await issue_linking_token(db, user, channel=channel)
+    return {
+        "token": token,
+        "expires_at": expires.isoformat(),
+        "channel": channel,
+        "instruction": (
+            f"Schick im Telegram-Chat: /link {token}\n"
+            "Dann ist dein Bot-Chat mit deinem Pinta-Account verknüpft "
+            "und Quotes landen im Web-Dashboard."
+        ),
     }
 
 

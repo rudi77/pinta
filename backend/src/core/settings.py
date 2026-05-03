@@ -48,6 +48,13 @@ class Settings(BaseSettings):
 
     # Telegram bot (Maler-Agent Messenger Interface)
     telegram_bot_token: str = ""
+    # Long-lived shared secret the Telegram bot uses to authenticate its
+    # /api/v1/agent/bot/* calls against the Pinta backend. Generate once,
+    # set the same value in both backend .env (BOT_SERVICE_TOKEN=...) and
+    # the bot's runtime env. Empty = bot adapter cannot reach the backend.
+    bot_service_token: str = ""
+    # Backend URL the bot adapter calls. For local dev: http://127.0.0.1:8000
+    bot_backend_url: str = "http://127.0.0.1:8000"
     # Embedding model for RAG material search
     openai_embedding_model: str = "text-embedding-3-small"
     # Embedding dimension (must match the model; 1536 for text-embedding-3-small)
