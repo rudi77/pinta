@@ -13,7 +13,9 @@ from src.core.websocket_manager import keep_connections_alive
 from src.core.security_tasks import start_security_tasks, stop_security_tasks, get_security_status
 from src.core.quota_scheduler import start_quota_scheduler, stop_quota_scheduler
 from src.core.settings import settings
-from src.routes import auth, users, quotes, ai, payments, chat, documents, quota, materials
+from src.routes import (
+    auth, users, quotes, ai, payments, chat, documents, quota, materials, agent,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -72,7 +74,19 @@ async def lifespan(app: FastAPI):
     # Initialize Redis cache
     await cache_service.connect()
     logger.info("Cache service initialized")
-    
+
+    # Warm the pytaskforce AgentFactory once — instantiating LiteLLM,
+    # tool registry, etc. on the first request would otherwise add ~5s
+    # latency to whatever user gets unlucky.
+    try:
+        from src.services.agent_service import agent_service
+        await agent_service.start()
+        logger.info("Agent service warmed")
+    except Exception as exc:
+        # If Azure creds aren't configured the factory raises on warm; we
+        # log and continue so the rest of the API stays available.
+        logger.warning("Agent service warm failed: %s", exc)
+
     # Start background tasks
     asyncio.create_task(keep_connections_alive())
     await start_security_tasks()
@@ -138,6 +152,7 @@ app.include_router(chat.router, tags=["chat"])
 app.include_router(documents.router, tags=["documents"])
 app.include_router(quota.router, tags=["quota"])
 app.include_router(materials.router, tags=["materials"])
+app.include_router(agent.router)
 
 # Health check
 @app.get("/health")
