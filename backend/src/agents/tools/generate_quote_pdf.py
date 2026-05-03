@@ -1,9 +1,10 @@
 """generate_quote_pdf — render a Maler-Quote dict into a printable PDF.
 
 Tool returns the absolute path to the generated PDF so the Telegram runner
-(or any other channel) can ship it as a downloadable attachment. We
-deliberately keep the rendering self-contained (reportlab platypus only,
-no external HTML/CSS) so the agent has zero install drift to worry about.
+(or any other channel) can ship it as a downloadable attachment AND
+persists the file as a ``Document`` row attached to the active user (and,
+if save_quote_to_db ran first, to the freshly created Quote) so the PDF
+becomes discoverable from the Web Dashboard.
 
 Layout (single column A4):
   - Letterhead:  "Kostenvoranschlag <quote_number>" + Datum
@@ -37,6 +38,57 @@ def _slugify(value: str, fallback: str = "quote") -> str:
     safe = "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in value)
     safe = safe.strip("_")
     return safe or fallback
+
+
+async def _persist_document_record(path: Path, size: int) -> int | None:
+    """Insert a Document row pointing at the freshly written PDF.
+
+    Pulls the active user_id from the same ContextVar save_quote_to_db
+    uses; if the agent runs outside an HTTP/bot mission (e.g. a CLI
+    smoke test), returns None silently.
+    """
+    from src.agents.tools.save_quote_to_db import (
+        current_conversation_id,
+        current_user_id,
+    )
+
+    user_id = current_user_id.get()
+    if user_id is None:
+        return None
+
+    from sqlalchemy import select
+    from src.core.database import AsyncSessionLocal
+    from src.models.models import Document, Quote
+
+    try:
+        async with AsyncSessionLocal() as db:
+            # Try to associate with the latest Quote of this user — that's
+            # the one save_quote_to_db just inserted.
+            latest_quote_id = (await db.execute(
+                select(Quote.id)
+                .where(Quote.user_id == user_id)
+                .order_by(Quote.id.desc())
+                .limit(1)
+            )).scalar_one_or_none()
+
+            doc = Document(
+                user_id=user_id,
+                filename=path.name,
+                original_filename=path.name,
+                file_path=str(path),
+                file_size=size,
+                mime_type="application/pdf",
+                processing_status="completed",
+                quote_id=latest_quote_id,
+            )
+            db.add(doc)
+            await db.commit()
+            return doc.id
+    except Exception as exc:
+        logger.warning(
+            "generate_quote_pdf.persist_document_failed err=%s", exc,
+        )
+        return None
 
 
 def _fmt_eur(value: Any) -> str:
@@ -269,14 +321,23 @@ class GenerateQuotePdfTool(ToolProtocol):
             _render_pdf(quote, output_path)
             size = output_path.stat().st_size
 
+            # Persist as a Document row attached to the active user (and
+            # quote, if save_quote_to_db ran first), so the PDF appears in
+            # the Web Dashboard's documents list, not only on the bot's FS.
+            document_id = await _persist_document_record(output_path, size)
+
             return {
                 "success": True,
                 "file_path": str(output_path),
                 "filename": output_path.name,
                 "size_bytes": size,
+                "document_id": document_id,
                 "note": (
                     f"PDF erstellt ({size // 1024} KB). Der Telegram-Bot schickt "
-                    "die Datei automatisch im Anschluss als Download."
+                    "die Datei automatisch im Anschluss als Download. "
+                    "Im Web-Dashboard liegt sie unter den Dokumenten."
+                    if document_id is not None
+                    else f"PDF erstellt ({size // 1024} KB)."
                 ),
             }
         except Exception as exc:  # pragma: no cover — surfaced to agent
