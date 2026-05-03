@@ -122,10 +122,19 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def cors_origins(self) -> List[str]:
-        """Get parsed CORS origins as a list"""
+        """Get parsed CORS origins as a list with localhost/127 dev aliases."""
         if isinstance(self.allowed_origins, str):
-            return [origin.strip() for origin in self.allowed_origins.split(',') if origin.strip()]
-        return self.allowed_origins
+            origins = [origin.strip() for origin in self.allowed_origins.split(',') if origin.strip()]
+        else:
+            origins = list(self.allowed_origins)
+
+        expanded = set(origins)
+        for origin in origins:
+            if origin.startswith("http://localhost:"):
+                expanded.add(origin.replace("http://localhost:", "http://127.0.0.1:", 1))
+            elif origin.startswith("http://127.0.0.1:"):
+                expanded.add(origin.replace("http://127.0.0.1:", "http://localhost:", 1))
+        return sorted(expanded)
     
     @field_validator('secret_key')
     @classmethod

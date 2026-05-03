@@ -58,6 +58,21 @@ async def check_user_quota(user: User, db: AsyncSession) -> bool:
     await db.commit()
     return True
 
+def _parse_conversation_history(raw_history):
+    if not raw_history:
+        return []
+    try:
+        parsed = json.loads(raw_history)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return [
+        message for message in parsed
+        if isinstance(message, dict) and "role" in message and "content" in message
+    ]
+
+
 def quote_to_response(quote):
     return {
         "id": quote.id,
@@ -73,7 +88,7 @@ def quote_to_response(quote):
         "status": quote.status,
         "created_by_ai": quote.created_by_ai,
         "is_paid": quote.is_paid,
-        "conversation_history": json.loads(quote.conversation_history) if quote.conversation_history else [],
+        "conversation_history": _parse_conversation_history(quote.conversation_history),
         "items": [
             {
                 "id": item.id,
@@ -262,7 +277,7 @@ async def update_quote(
     )
     quote.quote_items = items_result.scalars().all()
     
-    return quote
+    return quote_to_response(quote)
 
 @router.delete("/{quote_id}", response_model=SuccessResponse)
 async def delete_quote(
@@ -374,7 +389,7 @@ async def generate_quote_with_ai(
         )
         quote = result.scalar_one()
         
-        return quote
+        return quote_to_response(quote)
         
     except Exception as e:
         # Update status to failed
@@ -476,7 +491,7 @@ async def duplicate_quote(
     )
     new_quote.quote_items = items_result.scalars().all()
     
-    return new_quote
+    return quote_to_response(new_quote)
 
 @router.post("/{quote_id}/pdf/generate", response_model=PDFGenerationResponse)
 async def generate_quote_pdf(

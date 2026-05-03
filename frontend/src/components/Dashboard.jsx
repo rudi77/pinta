@@ -79,7 +79,7 @@ const Dashboard = () => {
             totalRevenue
           });
         }
-      } catch (err) {
+      } catch {
         setError('Fehler beim Laden der Dashboard-Daten');
       } finally {
         setLoading(false);

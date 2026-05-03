@@ -2,7 +2,6 @@ import React from 'react';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import Dashboard from './components/Dashboard';
 import QuoteCreator from './components/QuoteCreator';
-import apiClient from './services/apiClient';
 import './App.css';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';

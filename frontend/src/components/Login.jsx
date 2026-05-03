@@ -21,7 +21,7 @@ const Login = () => {
     e.preventDefault();
     try {
       await login(email, password);
-    } catch (error) {
+    } catch {
       // Error is already handled by useAuth
     }
   };
@@ -29,7 +29,7 @@ const Login = () => {
   const handleDemoLogin = async () => {
     try {
       await demoLogin();
-    } catch (error) {
+    } catch {
       // Error is already handled by useAuth
     }
   };

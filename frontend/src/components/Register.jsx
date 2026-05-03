@@ -31,7 +31,7 @@ const Register = () => {
       if (response && response.is_verified === false) {
         setVerificationPending(true);
       }
-    } catch (error) {
+    } catch {
       // Error is already handled by useAuth
     }
   };

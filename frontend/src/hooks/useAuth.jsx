@@ -26,7 +26,7 @@ export function AuthProvider({ children }) {
           setIsAuthenticated(true);
           setDemoMode(userData.email === 'demo@example.com');
         }
-      } catch (err) {
+      } catch {
         // Clear invalid token
         localStorage.removeItem('access_token');
         setIsAuthenticated(false);

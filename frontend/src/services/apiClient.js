@@ -47,24 +47,20 @@ class ApiClient {
       }
     }
 
-    try {
-      const response = await fetch(url, config);
-      
-      if (!response.ok) {
-        if (response.status === 401) {
-          this.setToken(null);
-          window.dispatchEvent(new Event('auth:logout'));
-          throw new Error('Authentication required');
-        }
-        
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `HTTP ${response.status}`);
+    const response = await fetch(url, config);
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        this.setToken(null);
+        window.dispatchEvent(new Event('auth:logout'));
+        throw new Error('Authentication required');
       }
 
-      return await response.json();
-    } catch (error) {
-      throw error;
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `HTTP ${response.status}`);
     }
+
+    return await response.json();
   }
 
   // Authentication
@@ -123,7 +119,7 @@ class ApiClient {
   // Quotes
   async getQuotes(params = {}) {
     const queryString = new URLSearchParams(params).toString();
-    const endpoint = queryString ? `/quotes?${queryString}` : '/quotes';
+    const endpoint = queryString ? `/quotes/?${queryString}` : '/quotes/';
     return await this.request(endpoint);
   }
 
@@ -161,6 +157,20 @@ class ApiClient {
   async duplicateQuote(quoteId) {
     return await this.request(`/quotes/${quoteId}/duplicate`, {
       method: 'POST',
+    });
+  }
+
+  async updateQuoteStatus(quote, status) {
+    return await this.updateQuote(quote.id, {
+      customer_name: quote.customer_name || '-',
+      customer_email: quote.customer_email || null,
+      customer_phone: quote.customer_phone || null,
+      customer_address: quote.customer_address || null,
+      project_title: quote.project_title || 'Kostenvoranschlag',
+      project_description: quote.project_description || '',
+      total_amount: quote.total_amount || 0,
+      status,
+      created_by_ai: Boolean(quote.created_by_ai),
     });
   }
 
@@ -204,10 +214,31 @@ class ApiClient {
   }
 
   getAgentPdfUrl(pdfUrl) {
-    if (!pdfUrl) return null;
-    if (pdfUrl.startsWith('http')) return pdfUrl;
-    const path = pdfUrl.replace(/^\/api\/v1/, '');
+    return this.getPublicApiUrl(pdfUrl);
+  }
+
+  getPublicApiUrl(pathOrUrl) {
+    if (!pathOrUrl) return null;
+    if (pathOrUrl.startsWith('http')) return pathOrUrl;
+    const path = pathOrUrl.replace(/^\/api\/v1/, '');
     return `${PUBLIC_API_BASE_URL}${path}`;
+  }
+
+  async fetchAgentPdf(pdfUrl) {
+    const url = this.getPublicApiUrl(pdfUrl);
+    if (!url) throw new Error('PDF URL fehlt');
+    return await this.fetchAuthenticatedBlob(url);
+  }
+
+  async fetchAuthenticatedBlob(url) {
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(url, {
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    });
+    if (!response.ok) throw new Error(`PDF download failed: ${response.status}`);
+    return await response.blob();
   }
 
   // Health check

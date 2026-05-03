@@ -4,7 +4,7 @@ import apiClient from '../services/apiClient';
 import { useNavigate } from 'react-router-dom';
 
 const QuoteCreator = () => {
-  const { user, demoMode } = useAuth();
+  const { demoMode } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);

@@ -9,6 +9,7 @@ const QuoteDetail = () => {
   const navigate = useNavigate();
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -16,7 +17,7 @@ const QuoteDetail = () => {
       try {
         const data = await apiClient.getQuote(quoteId);
         setQuote(data);
-      } catch (err) {
+      } catch {
         setError('Fehler beim Laden des Angebots');
       } finally {
         setLoading(false);
@@ -69,6 +70,69 @@ const QuoteDetail = () => {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    if (!quote) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.downloadQuotePdf(quote.id);
+      const data = await response.json();
+      let blob = null;
+      if (data.pdf_info?.pdf_base64) {
+        const byteChars = atob(data.pdf_info.pdf_base64);
+        const byteArray = new Uint8Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          byteArray[i] = byteChars.charCodeAt(i);
+        }
+        blob = new Blob([byteArray], { type: 'application/pdf' });
+      } else if (data.pdf_info?.download_url) {
+        const downloadUrl = apiClient.getPublicApiUrl(data.pdf_info.download_url);
+        blob = await apiClient.fetchAuthenticatedBlob(downloadUrl);
+      } else {
+        throw new Error('PDF-Antwort enthält keine Datei');
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${quote.quote_number}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message || 'PDF konnte nicht erzeugt werden');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDuplicate = async () => {
+    if (!quote) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      const duplicatedQuote = await apiClient.duplicateQuote(quote.id);
+      navigate(`/quotes/${duplicatedQuote.id}`);
+    } catch (err) {
+      setError(err.message || 'Angebot konnte nicht dupliziert werden');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (e) => {
+    const nextStatus = e.target.value;
+    if (!quote || nextStatus === quote.status) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      const updatedQuote = await apiClient.updateQuoteStatus(quote, nextStatus);
+      setQuote(updatedQuote);
+    } catch (err) {
+      setError(err.message || 'Status konnte nicht geändert werden');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -77,7 +141,7 @@ const QuoteDetail = () => {
     );
   }
 
-  if (error) {
+  if (error && !quote) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen">
         <p className="text-red-600 mb-4">{error}</p>
@@ -97,10 +161,39 @@ const QuoteDetail = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-6 flex justify-between items-center">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Angebot {quote.quote_number}</h1>
-        <Button onClick={() => navigate('/dashboard')}>Zurück zum Dashboard</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={handleDownloadPdf} disabled={actionLoading}>
+            PDF herunterladen
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/new-quote')} disabled={actionLoading}>
+            Bearbeiten
+          </Button>
+          <Button variant="outline" onClick={handleDuplicate} disabled={actionLoading}>
+            Duplizieren
+          </Button>
+          <select
+            aria-label="Status ändern"
+            value={quote.status}
+            onChange={handleStatusChange}
+            disabled={actionLoading}
+            className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+          >
+            <option value="draft">Entwurf</option>
+            <option value="pending">Ausstehend</option>
+            <option value="accepted">Angenommen</option>
+            <option value="rejected">Abgelehnt</option>
+          </select>
+          <Button variant="outline" onClick={() => navigate('/dashboard')}>Zurück zum Dashboard</Button>
+        </div>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <Card className="p-6">

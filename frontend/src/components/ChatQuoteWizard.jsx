@@ -9,7 +9,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { Loader2, Send, Upload, FileText } from 'lucide-react';
 
 const ChatQuoteWizard = () => {
-  const { user, demoMode, isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -17,7 +17,6 @@ const ChatQuoteWizard = () => {
   const [inputValue, setInputValue] = useState('');
   const [conversationHistory, setConversationHistory] = useState([]);
   const [currentQuote, setCurrentQuote] = useState(null);
-  const [showQuoteButton, setShowQuoteButton] = useState(false);
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [customerData, setCustomerData] = useState({
     customer_name: '',
@@ -170,13 +169,26 @@ const ChatQuoteWizard = () => {
     }
   };
 
-  const handleShowCustomerForm = () => {
-    setShowCustomerForm(true);
-  };
-
   const handleCustomerInputChange = (e) => {
     const { name, value } = e.target;
     setCustomerData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleOpenAgentPdf = async (pdfUrl, filename = 'kostenvoranschlag.pdf') => {
+    try {
+      const blob = await apiClient.fetchAgentPdf(pdfUrl);
+      const objectUrl = URL.createObjectURL(blob);
+      const opened = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      if (!opened) {
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = filename;
+        link.click();
+      }
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (err) {
+      setError(err.message || 'PDF konnte nicht geöffnet werden');
+    }
   };
 
   const handleCustomerFormSubmit = async (e) => {
@@ -273,7 +285,7 @@ const ChatQuoteWizard = () => {
                             <Button
                               type="button"
                               size="sm"
-                              onClick={() => window.open(apiClient.getAgentPdfUrl(message.quote.pdfUrl), '_blank', 'noopener,noreferrer')}
+                              onClick={() => handleOpenAgentPdf(message.quote.pdfUrl, `${message.quote.number || 'kostenvoranschlag'}.pdf`)}
                             >
                               PDF öffnen
                             </Button>
@@ -332,22 +344,6 @@ const ChatQuoteWizard = () => {
             </Button>
           </form>
         </div>
-
-        {/* Quote generation button */}
-        {showQuoteButton && !currentQuote && !showCustomerForm && (
-          <div className="p-4 border-t">
-            <Button
-              onClick={handleShowCustomerForm}
-              disabled={loading}
-              className="w-full"
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
-              Kostenvoranschlag erstellen
-            </Button>
-          </div>
-        )}
 
         {/* Kundenformular */}
         {showCustomerForm && !currentQuote && (
@@ -422,7 +418,7 @@ const ChatQuoteWizard = () => {
                 {currentQuote.pdfUrl && (
                   <Button
                     type="button"
-                    onClick={() => window.open(apiClient.getAgentPdfUrl(currentQuote.pdfUrl), '_blank', 'noopener,noreferrer')}
+                    onClick={() => handleOpenAgentPdf(currentQuote.pdfUrl, `${currentQuote.number || 'kostenvoranschlag'}.pdf`)}
                   >
                     PDF öffnen
                   </Button>
