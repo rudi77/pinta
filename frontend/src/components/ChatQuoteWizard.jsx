@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import apiClient from '../services/apiClient';
 import { Button } from './ui/button';
@@ -7,8 +8,9 @@ import { Card } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
 import { Loader2, Send, Upload, FileText } from 'lucide-react';
 
-const ChatQuoteWizard = ({ onNavigate }) => {
+const ChatQuoteWizard = () => {
   const { user, demoMode, isAuthenticated, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -46,23 +48,11 @@ const ChatQuoteWizard = ({ onNavigate }) => {
     setError(null);
 
     try {
-      // Debug: Log File-Objekt
-      console.log('File-Objekt:', file);
-
-      // Debug: Log FormData Inhalt
       const formData = new FormData();
       formData.append('file', file);
-      if (currentQuote && currentQuote.quote && currentQuote.quote.id) {
-        formData.append('quote_id', currentQuote.quote.id);
+      if (currentQuote?.id) {
+        formData.append('quote_id', currentQuote.id);
       }
-
-      // Debug: Alle FormData-Einträge loggen
-      for (let pair of formData.entries()) {
-        console.log('FormData:', pair[0], pair[1]);
-      }
-
-      // Debug: Zeige Typ und Größe der Datei
-      console.log('Dateityp:', file.type, 'Dateigröße:', file.size);
 
       // Upload file
       const response = await apiClient.uploadDocument(formData);
@@ -94,7 +84,6 @@ const ChatQuoteWizard = ({ onNavigate }) => {
       }]);
 
     } catch (err) {
-      console.error('Failed to upload file:', err);
       setError('Fehler beim Hochladen der Datei: ' + (err.message || 'Unbekannter Fehler'));
       // Add error message to chat
       setMessages(prev => [...prev, {
@@ -168,7 +157,6 @@ const ChatQuoteWizard = ({ onNavigate }) => {
       }]);
 
     } catch (err) {
-      console.error('Failed to process message:', err);
       setError('Fehler bei der Verarbeitung: ' + (err.message || 'Unbekannter Fehler'));
       
       // Add error message to chat
@@ -201,7 +189,7 @@ const ChatQuoteWizard = ({ onNavigate }) => {
         .map(doc => doc.analysis_result)
         .filter(Boolean);
       // Generate quote with customer data and document analyses
-      const quoteData = await apiClient.generateQuoteWithAI({
+      const quoteData = await apiClient.generateQuoteFromConversation({
         project_data: {
           description: messages.find(m => m.role === 'user')?.content || '',
           document_analyses: documentAnalyses
@@ -227,11 +215,10 @@ const ChatQuoteWizard = ({ onNavigate }) => {
       setShowCustomerForm(false);
       
       // Navigate to quote detail view
-      if (onNavigate && quoteData.quote && quoteData.quote.id) {
-        onNavigate(`/quotes/${quoteData.quote.id}`);
+      if (quoteData.quote && quoteData.quote.id) {
+        navigate(`/quotes/${quoteData.quote.id}`);
       }
     } catch (err) {
-      console.error('Failed to generate quote:', err);
       setError('Fehler beim Erstellen des Kostenvoranschlags: ' + (err.message || 'Unbekannter Fehler'));
       setMessages(prev => [...prev, {
         role: 'assistant',

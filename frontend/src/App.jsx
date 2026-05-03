@@ -85,10 +85,10 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/quick-quote" element={<PrivateRoute><QuickQuote /></PrivateRoute>} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/new-quote" element={<QuoteCreator />} />
-            <Route path="/chat-quote" element={<ChatQuoteWizard />} />
-            <Route path="/quotes/:quoteId" element={<QuoteDetail />} />
+            <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+            <Route path="/new-quote" element={<PrivateRoute><QuoteCreator /></PrivateRoute>} />
+            <Route path="/chat-quote" element={<PrivateRoute><ChatQuoteWizard /></PrivateRoute>} />
+            <Route path="/quotes/:quoteId" element={<PrivateRoute><QuoteDetail /></PrivateRoute>} />
             <Route path="/" element={<Navigate to="/chat-quote" />} />
           </Routes>
         </div>

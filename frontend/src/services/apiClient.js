@@ -12,13 +12,10 @@ class ApiClient {
   }
 
   setToken(token) {
-    console.log('setToken called with:', token);
     if (token) {
       localStorage.setItem('access_token', token);
-      console.log('Token saved to localStorage:', token);
     } else {
       localStorage.removeItem('access_token');
-      console.log('Token removed from localStorage');
     }
   }
 
@@ -27,7 +24,6 @@ class ApiClient {
       'Content-Type': 'application/json',
     };
     const token = localStorage.getItem('access_token');
-    console.log('TOKEN IM HEADER:', token);
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -56,7 +52,6 @@ class ApiClient {
       
       if (!response.ok) {
         if (response.status === 401) {
-          console.warn('401 Unauthorized! Token wird entfernt.', { url, config });
           this.setToken(null);
           window.dispatchEvent(new Event('auth:logout'));
           throw new Error('Authentication required');
@@ -68,7 +63,6 @@ class ApiClient {
 
       return await response.json();
     } catch (error) {
-      console.error('API request failed:', error);
       throw error;
     }
   }
@@ -79,24 +73,17 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
-    console.log('LOGIN RESPONSE:', response);
     if (response.access_token) {
-      console.log('SET TOKEN:', response.access_token);
       this.setToken(response.access_token);
-    } else {
-      console.warn('NO ACCESS TOKEN IN LOGIN RESPONSE');
     }
     return response;
   }
 
   async register(userData) {
-    console.log('BEFORE REGISTER RESPONSE');
-    const response = await this.request('/auth/register', {
+    return await this.request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     });
-    console.log('REGISTER RESPONSE:', response);
-    return response;
   }
 
   async verifyEmail(token) {
@@ -239,7 +226,7 @@ class ApiClient {
     return response;
   }
 
-  async generateQuoteWithAI(data) {
+  async generateQuoteFromConversation(data) {
     const response = await this.request('/ai/generate-quote', {
       method: 'POST',
       body: JSON.stringify(data),

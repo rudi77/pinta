@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import apiClient from '../services/apiClient';
+import { useNavigate } from 'react-router-dom';
 
-const QuoteCreator = ({ onNavigate }) => {
+const QuoteCreator = () => {
   const { user, demoMode } = useAuth();
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -64,7 +66,7 @@ const QuoteCreator = ({ onNavigate }) => {
       if (demoMode) {
         // Simulate API call in demo mode
         await new Promise(resolve => setTimeout(resolve, 2000));
-        onNavigate('dashboard');
+        navigate('/dashboard');
         return;
       }
       
@@ -94,10 +96,9 @@ const QuoteCreator = ({ onNavigate }) => {
       }
       
       // Navigate back to dashboard
-      onNavigate('dashboard');
+      navigate('/dashboard');
       
     } catch (err) {
-      console.error('Failed to create quote:', err);
       setError('Fehler beim Erstellen des Angebots: ' + (err.message || 'Unbekannter Fehler'));
     } finally {
       setLoading(false);
@@ -347,7 +348,7 @@ const QuoteCreator = ({ onNavigate }) => {
   return (
     <div className="container mx-auto px-4 py-8">
       <button
-        onClick={() => onNavigate('dashboard')}
+        onClick={() => navigate('/dashboard')}
         className="flex items-center text-blue-600 hover:text-blue-800 mb-6"
       >
         ← Zurück zum Dashboard

@@ -5,7 +5,7 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { useNavigate } from 'react-router-dom';
 
-const Dashboard = ({ onNavigate }) => {
+const Dashboard = () => {
   const { user, demoMode } = useAuth();
   const [quotes, setQuotes] = useState([]);
   const [stats, setStats] = useState({
@@ -80,7 +80,6 @@ const Dashboard = ({ onNavigate }) => {
           });
         }
       } catch (err) {
-        console.error('Failed to load dashboard data:', err);
         setError('Fehler beim Laden der Dashboard-Daten');
       } finally {
         setLoading(false);
@@ -273,7 +272,7 @@ const Dashboard = ({ onNavigate }) => {
           <div className="px-6 py-8 text-center">
             <p className="text-gray-500">Noch keine Angebote erstellt.</p>
             <button
-              onClick={() => onNavigate('new-quote')}
+              onClick={() => navigate('/new-quote')}
               className="mt-4 bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
             >
               Erstes Angebot erstellen
@@ -287,7 +286,7 @@ const Dashboard = ({ onNavigate }) => {
           <h3 className="text-lg font-semibold mb-4">Neuen Kostenvoranschlag erstellen</h3>
           <div className="space-y-4">
             <Button
-              onClick={() => navigate('/create-quote')}
+              onClick={() => navigate('/new-quote')}
               className="w-full"
             >
               Klassischer Editor
