@@ -47,10 +47,7 @@ async def _persist_document_record(path: Path, size: int) -> int | None:
     uses; if the agent runs outside an HTTP/bot mission (e.g. a CLI
     smoke test), returns None silently.
     """
-    from src.agents.tools.save_quote_to_db import (
-        current_conversation_id,
-        current_user_id,
-    )
+    from src.agents.tools.save_quote_to_db import current_quote_id, current_user_id
 
     user_id = current_user_id.get()
     if user_id is None:
@@ -62,14 +59,16 @@ async def _persist_document_record(path: Path, size: int) -> int | None:
 
     try:
         async with AsyncSessionLocal() as db:
-            # Try to associate with the latest Quote of this user — that's
-            # the one save_quote_to_db just inserted.
-            latest_quote_id = (await db.execute(
-                select(Quote.id)
-                .where(Quote.user_id == user_id)
-                .order_by(Quote.id.desc())
-                .limit(1)
-            )).scalar_one_or_none()
+            quote_id = current_quote_id.get()
+            if quote_id is None:
+                # Backward-compatible fallback for ad-hoc tool runs outside
+                # the normal save_quote_to_db -> generate_quote_pdf sequence.
+                quote_id = (await db.execute(
+                    select(Quote.id)
+                    .where(Quote.user_id == user_id)
+                    .order_by(Quote.id.desc())
+                    .limit(1)
+                )).scalar_one_or_none()
 
             doc = Document(
                 user_id=user_id,
@@ -79,7 +78,7 @@ async def _persist_document_record(path: Path, size: int) -> int | None:
                 file_size=size,
                 mime_type="application/pdf",
                 processing_status="completed",
-                quote_id=latest_quote_id,
+                quote_id=quote_id,
             )
             db.add(doc)
             await db.commit()

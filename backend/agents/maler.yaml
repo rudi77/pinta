@@ -21,7 +21,10 @@ description: >
 # --- Agent runtime tuning ------------------------------------------------
 agent:
   planning_strategy: native_react
-  max_steps: 12
+  # 20 statt 12: typischer Quote-Flow ist search_materials × 2 + python (calc)
+  # + save_quote_to_db + generate_quote_pdf + ein paar Planner-mark-done's
+  # = ~10 Steps. 12 reichte oft knapp nicht aus, dann lief er ins Limit.
+  max_steps: 20
 
 # --- LLM -----------------------------------------------------------------
 # pytaskforce nutzt LiteLLM. Modellauswahl erfolgt zentral via

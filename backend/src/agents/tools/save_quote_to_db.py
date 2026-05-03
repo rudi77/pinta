@@ -32,6 +32,7 @@ current_user_id: ContextVar[Optional[int]] = ContextVar("current_user_id", defau
 current_conversation_id: ContextVar[Optional[int]] = ContextVar(
     "current_conversation_id", default=None,
 )
+current_quote_id: ContextVar[Optional[int]] = ContextVar("current_quote_id", default=None)
 
 
 def _generate_quote_number() -> str:
@@ -128,6 +129,7 @@ class SaveQuoteToDbTool(BaseTool):
                 )
                 db.add(row)
                 await db.flush()
+                current_quote_id.set(row.id)
 
                 for idx, item in enumerate(items, start=1):
                     try:

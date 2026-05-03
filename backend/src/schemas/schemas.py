@@ -189,6 +189,12 @@ class AIAnalysisResponse(BaseModel):
     questions: List[Dict[str, Any]]
     suggestions: List[str]
     conversation_history: List[AIConversationMessage]
+    # Set when the agent autonomously produced a complete quote on this
+    # turn — the wizard then jumps straight to the quote instead of
+    # asking for customer details.
+    quote_id: Optional[int] = None
+    quote_number: Optional[str] = None
+    pdf_url: Optional[str] = None
 
 class AIFollowUpRequest(BaseModel):
     question: str
@@ -198,6 +204,9 @@ class AIQuestionResponse(BaseModel):
     response: str
     needs_more_info: bool
     conversation_history: List[AIConversationMessage]
+    quote_id: Optional[int] = None
+    quote_number: Optional[str] = None
+    pdf_url: Optional[str] = None
 
 class GenerateQuoteAIRequest(BaseModel):
     project_data: Dict[str, Any]

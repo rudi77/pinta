@@ -54,51 +54,90 @@ def default_json(obj):
         return obj.isoformat()
     raise TypeError(f"Type {type(obj)} not serializable")
 
+def _agent_pdf_url(pdf_path: Optional[str]) -> Optional[str]:
+    """Map an absolute PDF path from the agent to the auth-gated download URL.
+
+    The agent writes to ``backend/.taskforce_maler/quotes/<filename>``;
+    the public download endpoint is ``/api/v1/agent/pdf/<filename>``.
+    """
+    if not pdf_path:
+        return None
+    return f"/api/v1/agent/pdf/{os.path.basename(pdf_path)}"
+
 @router.post("/analyze-project", response_model=AIAnalysisResponse)
 async def analyze_project_input(
     request: AIAnalysisRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Analyze project description and generate intelligent follow-up questions"""
+    """First chat turn — backed by the unified Maler-Agent.
+
+    The agent's free-form German reply (typically a clarifying question on
+    the very first turn) is wrapped into ``questions[0].question`` because
+    that's the field the React ChatQuoteWizard renders as the assistant
+    bubble. Frontend stays unchanged.
+    """
     try:
-        logger.info(f"Analyzing project input for user {current_user.id}")
-        
-        # Initialize conversation history if not exists
+        logger.info(f"analyze-project (agent) user={current_user.id}")
+
+        from src.agents.tools.save_quote_to_db import (
+            current_conversation_id,
+            current_user_id,
+        )
+        from src.services.agent_service import agent_service
+
         if not request.conversation_history:
             request.conversation_history = []
-            
-        # Add user's initial input to conversation
+
+        user_token = current_user_id.set(current_user.id)
+        conv_token = current_conversation_id.set(None)
+        try:
+            result = await agent_service.chat(
+                db, current_user, request.input, channel="web",
+            )
+            current_conversation_id.set(result["conversation_id"])
+        finally:
+            current_user_id.reset(user_token)
+            current_conversation_id.reset(conv_token)
+
+        agent_text = (result.get("final_message") or "").strip() or (
+            "Erzähl mir mehr über das Projekt — Räume, Flächen, Material."
+        )
+
         request.conversation_history.append({
             "role": "user",
             "content": request.input,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         })
-        
-        result = await ai_service.analyze_project_description(
-            description=request.input,
-            context=getattr(request, 'context', None) or "initial_input",
-            conversation_history=request.conversation_history
-        )
-        
-        # Add AI's response to conversation
         request.conversation_history.append({
             "role": "assistant",
-            "content": json.dumps(result),
-            "timestamp": datetime.now().isoformat()
+            "content": agent_text,
+            "timestamp": datetime.now().isoformat(),
         })
-        
-        logger.debug("AI analysis result: %s", result)
 
+        pdf_url = _agent_pdf_url(result.get("pdf_path"))
         return AIAnalysisResponse(
-            analysis=result.get("analysis", {}),
-            questions=result.get("questions", []),
-            suggestions=result.get("suggestions", []),
+            analysis={
+                "project_type": "agent",
+                "estimated_area": None,
+                "complexity": "medium",
+                "missing_info": [],
+                "conversation_id": result["conversation_id"],
+            },
+            questions=[{
+                "id": "agent_reply",
+                "question": agent_text,
+                "type": "text",
+            }],
+            suggestions=[],
             conversation_history=request.conversation_history,
-            success=True
+            quote_id=result.get("quote_id"),
+            quote_number=result.get("quote_number"),
+            pdf_url=pdf_url,
         )
-        
+
     except Exception as e:
-        logger.error(f"Error analyzing project input: {str(e)}")
+        logger.error(f"analyze-project (agent) failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 ALLOWED_VISUAL_MIME_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic"}
@@ -183,14 +222,19 @@ async def _run_agent_for_quote(
         current_user_id.reset(user_token)
         current_conversation_id.reset(conv_token)
 
-    # The agent (via save_quote_to_db) just inserted a Quote row.
-    # Reload the latest one for this user.
-    latest_q = (await db.execute(
-        select(Quote)
-        .where(Quote.user_id == user.id)
-        .order_by(Quote.id.desc())
-        .limit(1)
-    )).scalar_one_or_none()
+    quote_id = result.get("quote_id")
+    if quote_id is not None:
+        latest_q = await db.get(Quote, quote_id)
+        if latest_q is not None and latest_q.user_id != user.id:
+            latest_q = None
+    else:
+        # Fallback for older tool results that did not return quote_id.
+        latest_q = (await db.execute(
+            select(Quote)
+            .where(Quote.user_id == user.id)
+            .order_by(Quote.id.desc())
+            .limit(1)
+        )).scalar_one_or_none()
 
     items_rows: list[QuoteItem] = []
     if latest_q is not None:
@@ -321,44 +365,69 @@ async def create_quick_quote(
 @router.post("/ask-question", response_model=AIQuestionResponse)
 async def ask_follow_up_question(
     request: AIFollowUpRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Handle follow-up questions in the AI conversation"""
+    """Multi-turn follow-up — backed by the unified Maler-Agent.
+
+    The agent uses its DB-backed conversation memory, so we don't need
+    to forward request.conversation_history (legacy frontend state).
+    The agent's reply text lands in ``response``; ``needs_more_info`` is
+    True when the agent did NOT generate a PDF yet (i.e. is still asking
+    clarifying questions), False when a quote+PDF were produced (then the
+    "Kostenvoranschlag erstellen" button can show).
+    """
     try:
-        logger.info(f"Processing follow-up question for user {current_user.id}")
-        
-        # Add user's question to conversation
+        logger.info(f"ask-question (agent) user={current_user.id}")
+
+        from src.agents.tools.save_quote_to_db import (
+            current_conversation_id,
+            current_user_id,
+        )
+        from src.services.agent_service import agent_service
+
+        user_token = current_user_id.set(current_user.id)
+        conv_token = current_conversation_id.set(None)
+        try:
+            result = await agent_service.chat(
+                db, current_user, request.question, channel="web",
+            )
+            current_conversation_id.set(result["conversation_id"])
+        finally:
+            current_user_id.reset(user_token)
+            current_conversation_id.reset(conv_token)
+
+        agent_text = (result.get("final_message") or "").strip() or (
+            "Sag mir noch ein paar Details zum Projekt."
+        )
+        # If the agent already produced a PDF, we have a complete quote
+        # and can let the frontend show the "Kostenvoranschlag erstellen"
+        # button. Otherwise it's still a clarifying turn.
+        produced_quote = bool(result.get("pdf_path"))
+
         request.conversation_history.append({
             "role": "user",
             "content": request.question,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         })
-        
-        # conversation_history in dicts umwandeln
-        history = [msg.model_dump() if hasattr(msg, 'model_dump') else dict(msg) for msg in request.conversation_history]
-        
-        result = await ai_service.ask_follow_up_question(
-            conversation_history=history,
-            user_message=request.question
-        )
-        
-        # Add AI's response to conversation
         request.conversation_history.append({
             "role": "assistant",
-            "content": result.get("response", ""),
-            "timestamp": datetime.now().isoformat()
+            "content": agent_text,
+            "timestamp": datetime.now().isoformat(),
         })
-        
+
+        pdf_url = _agent_pdf_url(result.get("pdf_path"))
         return AIQuestionResponse(
-            response=result.get("response", ""),
-            needs_more_info=result.get("needs_more_info", False),
-            suggested_questions=result.get("suggested_questions", []),
+            response=agent_text,
+            needs_more_info=not produced_quote,
             conversation_history=request.conversation_history,
-            success=True
+            quote_id=result.get("quote_id"),
+            quote_number=result.get("quote_number"),
+            pdf_url=pdf_url,
         )
-        
+
     except Exception as e:
-        logger.error(f"Error processing follow-up question: {str(e)}")
+        logger.error(f"Error processing follow-up question: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/generate-quote", response_model=AIQuoteGenerationResponse)

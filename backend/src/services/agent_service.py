@@ -23,6 +23,7 @@ The runtime contract:
 from __future__ import annotations
 
 import logging
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
@@ -202,6 +203,35 @@ class AgentService:
 
         return _walk(event_data)
 
+    @staticmethod
+    def extract_quote_ref_from_event(
+        event_data: Any,
+    ) -> Optional[tuple[int, Optional[str]]]:
+        """Recursive scan for {success: True, quote_id: int, quote_number: str?}."""
+        seen: set[int] = set()
+
+        def _walk(node: Any) -> Optional[tuple[int, Optional[str]]]:
+            if isinstance(node, dict):
+                if id(node) in seen:
+                    return None
+                seen.add(id(node))
+                qid = node.get("quote_id")
+                if node.get("success") is True and isinstance(qid, int):
+                    qnum = node.get("quote_number")
+                    return (qid, qnum if isinstance(qnum, str) else None)
+                for v in node.values():
+                    hit = _walk(v)
+                    if hit:
+                        return hit
+            elif isinstance(node, list):
+                for item in node:
+                    hit = _walk(item)
+                    if hit:
+                        return hit
+            return None
+
+        return _walk(event_data)
+
     # ── one-shot chat ────────────────────────────────────────────────────
 
     async def chat(
@@ -226,7 +256,17 @@ class AgentService:
 
         pdfs_before = self.snapshot_pdfs()
         agent = await create_maler_agent()
+        from src.agents.tools.save_quote_to_db import (
+            current_conversation_id,
+            current_quote_id,
+            current_user_id,
+        )
+        user_token = current_user_id.set(user.id)
+        conv_token = current_conversation_id.set(conv.id)
+        quote_token = current_quote_id.set(None)
         pdf_path: Optional[str] = None
+        quote_id: Optional[int] = None
+        quote_number: Optional[str] = None
         final_message = ""
         status = "completed"
         try:
@@ -242,6 +282,9 @@ class AgentService:
                     found = self.extract_pdf_path_from_event(event.data)
                     if found:
                         pdf_path = found
+                    qref = self.extract_quote_ref_from_event(event.data)
+                    if qref is not None:
+                        quote_id, quote_number = qref
                 elif etype == "final_answer":
                     final_message = (
                         event.data.get("content")
@@ -267,6 +310,32 @@ class AgentService:
                 await agent.close()
             except Exception:
                 pass
+            current_quote_id.reset(quote_token)
+            current_conversation_id.reset(conv_token)
+            current_user_id.reset(user_token)
+
+        # Fallback-Antwort: wenn der Agent leer zurückkommt aber im python-
+        # Tool tatsächlich ein Quote-Dict berechnet hat, nutzen wir das.
+        # Häufigste Ursache: Azure Content-Filter blockt das finale Summary
+        # oder max_steps lief ab — der eigentliche Quote ist aber da.
+        if (not final_message or not final_message.strip()) and pdf_path:
+            final_message = (
+                "Kostenvoranschlag fertig — PDF folgt gleich. "
+                "(Hinweis: die Text-Zusammenfassung wurde vom Provider "
+                "blockiert, der Quote selbst ist in Ordnung.)"
+            )
+        elif not final_message or not final_message.strip():
+            if status == "error":
+                final_message = (
+                    "Hmm, da hat mich der KI-Provider mittendrin gestoppt "
+                    "(meist Content-Filter oder zu komplexe Anfrage). "
+                    "Probier's nochmal mit anderen Worten oder schick /neu "
+                    "für einen frischen Versuch."
+                )
+            else:
+                final_message = (
+                    "Erzähl mir mehr über das Projekt — Räume, Flächen, Material."
+                )
 
         # Persist the assistant turn (raw — humanization is the channel
         # adapter's responsibility, since e.g. Web wants markdown and
@@ -274,7 +343,8 @@ class AgentService:
         await self.append_message(
             db, conv, role="assistant", content=final_message or "",
             extra_metadata=(
-                f'{{"pdf_path": {pdf_path!r}}}' if pdf_path else None
+                json.dumps({"pdf_path": pdf_path}, ensure_ascii=False)
+                if pdf_path else None
             ),
         )
         await db.commit()
@@ -283,6 +353,8 @@ class AgentService:
             "conversation_id": conv.id,
             "final_message": final_message,
             "pdf_path": pdf_path,
+            "quote_id": quote_id,
+            "quote_number": quote_number,
             "status": status,
         }
 
@@ -313,7 +385,17 @@ class AgentService:
 
         pdfs_before = self.snapshot_pdfs()
         agent = await create_maler_agent()
+        from src.agents.tools.save_quote_to_db import (
+            current_conversation_id,
+            current_quote_id,
+            current_user_id,
+        )
+        user_token = current_user_id.set(user.id)
+        conv_token = current_conversation_id.set(conv.id)
+        quote_token = current_quote_id.set(None)
         pdf_path: Optional[str] = None
+        quote_id: Optional[int] = None
+        quote_number: Optional[str] = None
         final_message = ""
         status = "completed"
         try:
@@ -329,6 +411,9 @@ class AgentService:
                     found = self.extract_pdf_path_from_event(event.data)
                     if found:
                         pdf_path = found
+                    qref = self.extract_quote_ref_from_event(event.data)
+                    if qref is not None:
+                        quote_id, quote_number = qref
                 elif etype == "final_answer":
                     final_message = (
                         event.data.get("content")
@@ -351,11 +436,15 @@ class AgentService:
                 await agent.close()
             except Exception:
                 pass
+            current_quote_id.reset(quote_token)
+            current_conversation_id.reset(conv_token)
+            current_user_id.reset(user_token)
 
         await self.append_message(
             db, conv, role="assistant", content=final_message or "",
             extra_metadata=(
-                f'{{"pdf_path": {pdf_path!r}}}' if pdf_path else None
+                json.dumps({"pdf_path": pdf_path}, ensure_ascii=False)
+                if pdf_path else None
             ),
         )
         await db.commit()
@@ -366,6 +455,8 @@ class AgentService:
                 "conversation_id": conv.id,
                 "final_message": final_message,
                 "pdf_path": pdf_path,
+                "quote_id": quote_id,
+                "quote_number": quote_number,
                 "status": status,
             },
         }
