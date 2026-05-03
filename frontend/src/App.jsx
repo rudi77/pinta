@@ -89,7 +89,7 @@ function App() {
             <Route path="/new-quote" element={<QuoteCreator />} />
             <Route path="/chat-quote" element={<ChatQuoteWizard />} />
             <Route path="/quotes/:quoteId" element={<QuoteDetail />} />
-            <Route path="/" element={<Navigate to="/quick-quote" />} />
+            <Route path="/" element={<Navigate to="/chat-quote" />} />
           </Routes>
         </div>
       </AuthProvider>

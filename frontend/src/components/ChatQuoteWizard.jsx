@@ -124,7 +124,6 @@ const ChatQuoteWizard = ({ onNavigate }) => {
         type: 'text'
       }]);
 
-      // Update conversation history
       const updatedHistory = [...conversationHistory, {
         role: 'user',
         content: userMessage,
@@ -132,48 +131,27 @@ const ChatQuoteWizard = ({ onNavigate }) => {
       }];
       setConversationHistory(updatedHistory);
 
-      // If this is the first message, analyze input
-      if (messages.length === 0) {
-        const analysis = await apiClient.analyzeInput(userMessage);
-        console.log('AI analysis response:', analysis);
-        // Sicherstellen, dass questions existiert und mindestens ein Element hat
-        const firstQuestion = analysis?.questions?.[0]?.question || 'Keine Frage generiert.';
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: firstQuestion,
-          type: 'text'
-        }]);
+      const attachments = uploadedDocuments
+        .filter((doc) => doc.file_path)
+        .map((doc) => ({
+          file_path: doc.file_path,
+          file_name: doc.original_filename || doc.filename,
+          type: doc.mime_type?.startsWith('image/') ? 'image' : 'document',
+        }));
+      const response = await apiClient.chatWithAgent(userMessage, attachments);
+      const assistantText = response.humanized_message || response.final_message || 'Keine Antwort generiert.';
 
-        // Update conversation history
-        setConversationHistory(prev => [...prev, {
-          role: 'assistant',
-          content: firstQuestion,
-          timestamp: new Date().toISOString()
-        }]);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: assistantText,
+        type: 'text'
+      }]);
 
-      } else {
-        // Process follow-up question
-        const response = await apiClient.askQuestion(userMessage, updatedHistory);
-        
-        // Add AI response to chat
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: response.response,
-          type: 'text'
-        }]);
-
-        // Update conversation history
-        setConversationHistory(prev => [...prev, {
-          role: 'assistant',
-          content: response.response,
-          timestamp: new Date().toISOString()
-        }]);
-
-        // If we have enough information, show quote button
-        if (!response.needs_more_info) {
-          setShowQuoteButton(true);
-        }
-      }
+      setConversationHistory(prev => [...prev, {
+        role: 'assistant',
+        content: assistantText,
+        timestamp: new Date().toISOString()
+      }]);
 
     } catch (err) {
       console.error('Failed to process message:', err);

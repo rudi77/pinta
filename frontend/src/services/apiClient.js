@@ -192,6 +192,18 @@ class ApiClient {
     return await this.request(`/payments/status/${sessionId}`);
   }
 
+  // Unified Agent
+  async chatWithAgent(message, attachments = []) {
+    return await this.request('/agent/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        message,
+        attachments,
+        channel: 'web',
+      }),
+    });
+  }
+
   // Health check
   async healthCheck() {
     const base = resolvedBase || 'http://localhost:8000'
