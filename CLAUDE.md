@@ -4,190 +4,331 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a FastAPI-based backend for "Maler Kostenvoranschlag" - an AI-powered quote generation system for painting contractors. The application uses OpenAI GPT-4 for intelligent document analysis, quote generation, and natural language processing, with PostgreSQL/SQLite for data persistence and Redis for caching.
+Pinta is a FastAPI backend + React frontend + Telegram bot for "Maler
+Kostenvoranschlag" — an AI-powered quote generator for painting contractors
+in DE/AT. Quote generation runs through a **pytaskforce-based agent**
+("Manfred"), which both the Web App and the Telegram bot reach via the
+unified `/api/v1/agent/*` HTTP endpoint. PostgreSQL/SQLite for data, Redis
+optional for caching.
 
-**Note**: The README mentions Flask but the codebase actually uses **FastAPI** - this is the authoritative framework in use.
+**Note**: README.md still mentions Flask in places; the codebase actually
+uses **FastAPI** — that's the authoritative framework.
 
-## Architecture & Key Components
+## Architecture
 
-### Core Structure
-- **FastAPI Application**: Main app in `src/main.py` with lifespan management for startup/shutdown
-- **Database Layer**: SQLAlchemy async with conditional pooling (supports both SQLite and PostgreSQL)
-- **Authentication**: JWT-based with token blacklisting and refresh token support
-- **AI Integration**: OpenAI GPT-4o integration for document analysis and quote generation
-- **Document Processing**: OCR with Tesseract, PDF processing with pdfplumber
-- **Caching**: Redis-based caching service
-- **Background Tasks**: Async task management system
-
-### Import Path Configuration
-The codebase uses `src/` as the Python path root. All imports are relative to `src/`, e.g.:
-```python
-from core.database import Base
-from models.models import User
-from routes.auth import router
+```
+┌─────────────────┐    ┌─────────────────┐
+│ React Web App   │    │ Telegram Bot    │
+│ (frontend/)     │    │ (run as adapter)│
+└───────┬─────────┘    └────────┬────────┘
+        │ HTTP/JWT             │ HTTP/Bot-Service-Token
+        ▼                      ▼
+┌──────────────────────────────────────────┐
+│   FastAPI Backend (backend/src/main.py)  │
+│   ─ /api/v1/auth /users /quotes /...     │
+│   ─ /api/v1/ai/quick-quote (agent-backed)│
+│   ─ /api/v1/agent/chat[/stream]          │   ← unified agent endpoint
+│   ─ /api/v1/agent/bot/{chat,reset,link}  │   ← bot-service-token auth
+│   ─ AgentService → pytaskforce LeanAgent │
+│       Tools: python, search_materials,   │
+│              save_quote_to_db,           │
+│              generate_quote_pdf,         │
+│              multimedia                  │
+└────────────────┬─────────────────────────┘
+                 ▼
+         ┌──────────────────┐
+         │  Pinta DB         │  ← single source of truth
+         │  User, Quote,     │
+         │  QuoteItem,       │
+         │  Document,        │
+         │  Conversation,    │   stage 1
+         │  ConversationMsg, │   stage 1
+         │  ChannelLink,     │   stage 1 (telegram chat ↔ user)
+         │  MaterialPrice    │
+         └──────────────────┘
 ```
 
-### Database Models Architecture
-- **User**: Core user entity with quota tracking, Stripe integration, premium subscriptions
-- **Quote**: Quote entities with AI conversation history, status workflow
-- **QuoteItem**: Line items within quotes with room/area details
-- **Document**: File uploads with OCR results, processing metadata
-- **Payment**: Stripe payment integration
-- **UsageTracking**: Resource usage monitoring
-- **QuotaNotification**: User quota limit notifications
+## Key Components
 
-### Circular Import Management
-The codebase uses local imports in functions to avoid circular dependencies:
+### FastAPI Backend (`backend/src/`)
+- **main.py** — app factory, lifespan starts AgentFactory, security tasks,
+  quota scheduler, Redis cache.
+- **routes/** — auth, users, quotes, ai, payments, chat, documents, quota,
+  materials, **agent** (unified endpoint).
+- **services/** — `agent_service.py` (façade around pytaskforce LeanAgent +
+  DB-backed conversation memory), `channel_link_service.py` (telegram chat
+  ↔ user mapping with shadow-user creation + linking-token flow),
+  `ai_service.py` (legacy single-shot prompts; still used by older routes
+  like analyze-project), `quote_calculator.py` (deterministic math),
+  `rag_service.py` (cosine search over MaterialPrice), `pdf_service.py` /
+  `professional_pdf_service.py` (legacy PDF code, mostly unused now).
+- **agents/** — pytaskforce wiring: `factory.py` (warm AgentFactory,
+  register tools), `taskforce_setup.py` (env bridge AZURE_OPENAI_* →
+  AZURE_API_*), `tools/` (Pinta-specific ToolProtocol implementations).
+
+### Pinta Agent Tools (`backend/src/agents/tools/`)
+Registered via `register_pinta_tools()` in `agents/factory.py`:
+- **search_materials** — RAG over `material_prices` table; gracefully
+  empty when table is missing.
+- **save_quote_to_db** — inserts a `Quote` + `QuoteItem` rows for the
+  active user (read from `current_user_id` ContextVar). Must run BEFORE
+  `generate_quote_pdf` so the PDF can attach to the freshly created Quote.
+- **generate_quote_pdf** — renders the quote dict via reportlab and
+  ALSO inserts a `Document` row pointing at the file. PDFs land in
+  `backend/.taskforce_maler/quotes/`.
+
+Plus pytaskforce native tools used by the agent: `python` (sandboxed
+arithmetic), `multimedia` (image vision + PDF text extraction).
+
+### Telegram bot (`backend/src/telegram/runner.py` + `scripts/run_telegram_bot.py`)
+- Long-polling adapter via pytaskforce's `TelegramPoller` /
+  `TelegramOutboundSender`.
+- Owns NO agent logic — every inbound message is forwarded to
+  `POST /api/v1/agent/bot/chat` with `X-Bot-Service-Token`,
+  `X-Channel: telegram`, `X-External-Id: <chat_id>` headers.
+- PDF send: backend returns a `pdf_filename`, bot uploads
+  `backend/.taskforce_maler/quotes/<filename>` via `sendDocument`.
+  Works only because bot + backend share the local FS in dev — split
+  deployment would route through `/api/v1/agent/pdf/<name>` instead.
+- Commands: `/neu`, `/new`, `/reset` (archive active conversation),
+  `/start [token]`, `/link <token>` (consume a Web-issued linking token).
+
+### Database Models (`backend/src/models/models.py`)
+- **User** — auth, premium, quota counters, `hourly_rate`,
+  `material_cost_markup`. `is_active=True, is_verified=False` for
+  bot-created shadow users.
+- **Quote / QuoteItem** — single source of truth for quotes from any
+  channel.
+- **Document** — file uploads + agent-generated PDFs.
+- **Conversation / ConversationMessage** — per-user, channel-tagged
+  agent thread; `is_active=True` for the current thread, archived on
+  `/neu`. Backs the agent's chat memory.
+- **ChannelLink** — `(channel, external_id) → user_id` mapping.
+  `is_anonymous_shadow=True` for auto-created users from Telegram.
+  `linking_token` is a one-shot 24h secret issued by the Web for
+  `/start <token>` / `/link <token>` hand-off.
+- **MaterialPrice** — RAG knowledge base; embeddings as JSON text so the
+  table works on SQLite without pgvector.
+
+## Import Path
+
+The code uses `src/` as the Python package root inside `backend/`. From
+the project root:
 ```python
-# In security.py
-async def get_current_user(...):
-    from models.models import User  # Local import to avoid circular dependency
+from src.core.database import Base
+from src.models.models import User
+from src.routes.auth import router
 ```
+PYTHONPATH must include `backend/`. Tests/scripts handle this via
+`sys.path.insert(0, str(REPO_ROOT / "backend"))`.
 
-## Development Commands
+Local imports in functions are used to break circular dependencies (e.g.
+`get_current_user` imports `User` lazily inside the function body).
 
-### Environment Setup
-```bash
-# Backend setup
+## Environment Setup
+
+```powershell
+# Backend
 cd backend
 python -m venv .venv
-.venv\Scripts\activate  # Windows
+.venv\Scripts\activate
 pip install -r requirements.txt
+pip install -e ..\..\pytaskforce   # editable install of the agent framework
 
-# Set PYTHONPATH for development
-$env:PYTHONPATH = "C:\Users\rudi\source\pinta\backend\src"  # PowerShell
+# Frontend
+cd ..\frontend
+npm install
 ```
 
-### Testing (Integration Test Suite)
-```bash
-# Run all integration tests
+### Required `.env` keys (file lives at the **repo root**, not `backend/`)
+```
+# Auth
+SECRET_KEY=<32+ chars>
+
+# OpenAI / Azure (backend AND bot read this)
+OPENAI_API_KEY=sk-...
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
+AZURE_OPENAI_API_VERSION=2024-10-21
+AGENT_LLM_MODEL_ALIAS=main          # main | fast | claude-sonnet | ...
+
+# Telegram
+TELEGRAM_BOT_TOKEN=<BotFather token>
+BOT_SERVICE_TOKEN=<long random secret — bot ↔ backend HMAC equivalent>
+BOT_BACKEND_URL=http://127.0.0.1:8000
+
+# Stripe (optional in dev, enforced in prod)
+STRIPE_SECRET_KEY=...
+STRIPE_PRICE_ID=...
+STRIPE_WEBHOOK_SECRET=...
+```
+
+`AZURE_OPENAI_*` is auto-bridged to LiteLLM's `AZURE_API_*` convention by
+`backend/src/agents/taskforce_setup.py::ensure_litellm_env_for_taskforce`.
+
+## Running
+
+```powershell
+# Backend (from project root)
+cd backend
+.\.venv\Scripts\python.exe -m uvicorn src.main:app --port 8000 --reload
+
+# Telegram bot (from project root)
+backend\.venv\Scripts\python.exe scripts\run_telegram_bot.py
+
+# Frontend dev server
+cd frontend
+npm run dev
+```
+
+The bot expects the backend to be reachable at `BOT_BACKEND_URL`; both
+processes can run on the same host.
+
+## Database Management
+
+### Alembic
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m alembic current
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m alembic revision --autogenerate -m "msg"
+```
+
+`alembic/env.py` strips the async driver from `DATABASE_URL`
+(`sqlite+aiosqlite` → `sqlite`, `postgresql+asyncpg` →
+`postgresql+psycopg2`) so the sync Engine inside Alembic works.
+
+### Existing-DB caveat
+`init_db()` (Base.metadata.create_all on app startup) creates tables from
+the models without touching `alembic_version`. If you start the app first
+and only later run alembic, tables exist but the version table is empty
+and `alembic upgrade head` re-runs migrations from 001 → 500-error. Fix:
+`alembic stamp <last-revision-applied>` first, then `upgrade head`.
+
+### Migrations
+- 001 — initial PostgreSQL schema
+- 002 — enhanced document processing (revision id is `002_enhanced_docs`,
+  NOT `002_enhanced_document_processing`; 003 used to reference the wrong
+  name and was fixed in stage 1)
+- 003 — quota management
+- 004 — user cost parameters
+- 005 — material_prices (RAG)
+- 006 — unified agent schema (Conversation, ConversationMessage,
+  ChannelLink)
+
+## Testing
+
+```powershell
+# All tests
 python scripts/run_tests.py all
 
-# Run specific test suites
-python scripts/run_tests.py auth     # Authentication tests
-python scripts/run_tests.py quotes   # Quote management tests
-python scripts/run_tests.py ai       # AI service tests
-python scripts/run_tests.py documents # Document processing tests
-python scripts/run_tests.py users    # User management tests
+# Specific suites
+python scripts/run_tests.py auth | quotes | ai | documents | users
 
-# Coverage and parallel execution
+# With coverage / parallel
 python scripts/run_tests.py coverage
 python scripts/run_tests.py all --parallel
 
-# Using make commands
+# Or via make
 make test
-make test-cov
-make test-auth
 ```
 
-### Database Management
-```bash
-# Run Alembic migrations
-alembic upgrade head
+Tests use in-memory SQLite, mock `AIService` calls, and create an
+isolated FastAPI app to avoid main-app side effects. `conftest.py`
+provides fixtures `test_user`, `auth_headers`, `test_quote`.
 
-# Create new migration
-alembic revision --autogenerate -m "Description"
-```
+The agent path itself isn't yet covered by integration tests (would
+require an OpenAI mock at the LiteLLM layer); regression tests for the
+prompt builder and quote calculator live in
+`backend/tests/test_ai_prompts_smoke.py` and
+`backend/tests/test_quote_calculator.py`.
 
-### Docker Development Environment
-```bash
-# Full stack with PostgreSQL + Redis
-docker-compose up --build
+## API Surface (key endpoints)
 
-# Individual services
-docker-compose up db redis  # Just database and cache
-```
+### Unified agent (use this for all new development)
+- `POST /api/v1/agent/chat` — sync chat, JWT-auth, returns
+  `{conversation_id, final_message, humanized_message, pdf_url, …}`.
+- `POST /api/v1/agent/chat/stream` — SSE stream, same auth.
+- `GET  /api/v1/agent/conversations` — user's conversations list.
+- `GET  /api/v1/agent/conversations/{id}/messages` — full transcript.
+- `POST /api/v1/agent/reset` — archive active, start fresh.
+- `GET  /api/v1/agent/pdf/{name}` — auth-gated PDF download.
+- `POST /api/v1/agent/linking-token` — Web user issues a token to paste
+  into Telegram.
+- `POST /api/v1/agent/bot/chat` — bot-service-token auth, headers
+  `X-Bot-Service-Token`, `X-Channel`, `X-External-Id`. Auto-creates
+  shadow user on first contact.
+- `POST /api/v1/agent/bot/reset` — same auth, archive active.
+- `POST /api/v1/agent/bot/link` — consume a linking token issued via
+  `/agent/linking-token` (rebinds shadow link to the real user).
 
-### Code Quality
-```bash
-make lint     # Run flake8, black --check, isort --check
-make format   # Auto-format with black and isort
-make clean    # Clean generated files
-```
+### Legacy (kept for backwards compatibility)
+- `POST /api/v1/ai/quick-quote` — STILL EXISTS but now delegates
+  internally to the unified agent (stage 4). Same request/response
+  schema as before so the React frontend keeps working unchanged.
+- `POST /api/v1/ai/analyze-project` and `POST /api/v1/ai/generate-quote`
+  — still on the legacy single-shot `AIService` path. Will be migrated
+  when the frontend switches to the unified `/agent/chat`.
 
-## Database Configuration Notes
+### Other (unchanged)
+- `/api/v1/auth/*`, `/api/v1/users/*`, `/api/v1/quotes/*`,
+  `/api/v1/documents/*`, `/api/v1/payments/*`, `/api/v1/quota/*`,
+  `/api/v1/materials/*`, `/api/v1/chat/*`.
 
-### SQLite vs PostgreSQL Compatibility
-The database engine configuration conditionally applies pooling parameters:
-```python
-# Only PostgreSQL gets connection pooling
-if not settings.database_url.startswith("sqlite"):
-    engine_kwargs.update({
-        "pool_size": settings.database_pool_max_size,
-        # ... other pooling params
-    })
-```
+## pytaskforce integration notes
 
-### Settings & Environment Variables
-Settings use Pydantic with field validators. Key environment variables:
-- `DATABASE_URL`: Database connection string
-- `OPENAI_API_KEY`: Required for AI features
-- `STRIPE_SECRET_KEY`: For payment processing
-- `REDIS_URL`: Cache connection
-- `SECRET_KEY`: JWT signing (must be 32+ chars)
+- pytaskforce is installed editable from a sibling repo
+  (`C:\Users\rudi\source\pytaskforce`) via `pip install -e`.
+- `AgentFactory` is warmed once at FastAPI startup
+  (`agent_service.start()` in lifespan); per-mission a fresh `LeanAgent`
+  is created (LeanAgent's message buffer is NOT parallel-safe across
+  missions, so reuse across chats would clobber).
+- Tools are registered in pytaskforce's global `_TOOL_REGISTRY` via
+  `register_tool(name, type, module)` from
+  `taskforce.infrastructure.tools.registry`.
+- The agent reads `AGENT_LLM_MODEL_ALIAS` from settings (default `main`
+  → `azure/gpt-5.4-mini` per pytaskforce's `configs/llm_config.yaml`).
+  Switch model without code change.
+- Agent state lives in `backend/.taskforce_maler/` (gitignored). Quote
+  PDFs land in `backend/.taskforce_maler/quotes/`. Conversation history
+  lives in the Pinta DB, NOT in pytaskforce's StateManager — we splice
+  it into the mission as a "Bisheriger Chat-Verlauf" prefix because
+  `LeanAgent.execute_stream` doesn't accept a prior-messages parameter.
 
-## Testing Architecture
+## Common Gotchas
 
-### Integration Test Structure
-- **Test Database**: In-memory SQLite with fresh schema per test
-- **Test Fixtures**: Comprehensive fixtures in `conftest.py` for users, auth, quotes
-- **Mocked Services**: AI service calls are mocked for reliability
-- **Isolated App**: Tests create separate FastAPI app to avoid main app conflicts
+- **`OPENAI_API_KEY` env var beats `.env`** — pydantic-settings prefers
+  process env over file. The Telegram-bot smoke script (`scripts/`)
+  pops the env var on startup so the .env value wins.
+- **`material_prices` table missing** — common when DB was created via
+  `init_db()` before stage 1 migrations ran. `search_materials` already
+  handles this (returns empty list with a "do not retry" hint), so the
+  agent falls back to faustregeln from the system prompt.
+- **`maler.yaml` is loaded by Pinta**, not by pytaskforce. The file
+  lives at `backend/agents/maler.yaml` and we read it ourselves with
+  PyYAML; only `system_prompt` and `tools` are passed inline to
+  `factory.create_agent`.
+- **PDF document_id in tool result** — `generate_quote_pdf` now also
+  inserts a `Document` row. If you need to find a generated PDF later
+  via the documents API, query for `mime_type='application/pdf'` +
+  user_id.
+- **Shadow users** are auto-created on first Telegram contact with
+  `email=tg-<chat_id>-<random>@telegram.shadow`. They have a random
+  password they can never use. They DON'T count against quota the same
+  way regular users do — be aware when monitoring.
 
-### Key Test Patterns
-```python
-# Authentication testing
-async def test_login(client: AsyncClient, test_user: User):
-    response = await client.post("/auth/login", data={"username": "...", "password": "..."})
-    
-# Authorized requests
-async def test_protected_endpoint(client: AsyncClient, auth_headers: dict):
-    response = await client.get("/quotes/", headers=auth_headers)
-```
+## Memory & Auto-Loaded Context
 
-## AI Service Integration
+The `~/.claude/projects/.../memory/` directory holds user/project memory.
+Don't duplicate that information here — CLAUDE.md is for code/repo facts
+only, memory is for evolving context.
 
-### Document Processing Pipeline
-1. **Upload**: File validation, hash-based deduplication
-2. **OCR**: Tesseract text extraction with confidence scoring
-3. **AI Analysis**: GPT-4 document interpretation
-4. **Structured Data**: Extract rooms, measurements, work requirements
+## Performance / Cost Notes
 
-### Quote Generation Flow
-1. **Input Processing**: Natural language or document-based input
-2. **AI Enhancement**: GPT-4 generates intelligent follow-up questions
-3. **Cost Calculation**: AI-assisted pricing based on extracted requirements
-4. **PDF Generation**: Professional quote formatting
-
-## Critical Development Notes
-
-### Model Changes & Migrations
-When modifying SQLAlchemy models:
-1. Avoid reserved field names like `metadata` (use `action_metadata`)
-2. Always run `alembic revision --autogenerate` after model changes
-3. Test migrations on both SQLite and PostgreSQL
-
-### Security Considerations
-- JWT tokens use blacklisting for logout
-- All database queries use SQLAlchemy ORM to prevent SQL injection
-- File uploads are validated by type and size
-- Sensitive data (API keys) are environment variables only
-
-### Performance Patterns
-- Use Redis caching for expensive AI calls
-- Background task processing for long-running operations
-- Database connection pooling for PostgreSQL deployments
-- Async/await throughout for I/O operations
-
-## Service Dependencies
-
-### Required External Services
-- **OpenAI API**: Core AI functionality
-- **Stripe**: Payment processing
-- **Redis**: Caching (optional but recommended)
-- **PostgreSQL**: Production database (SQLite for development)
-
-### Optional Integrations
-- **SMTP**: Email notifications
-- **Tesseract OCR**: Document text extraction
-- **pdf2image**: PDF to image conversion
+- Quote generation via the agent: ~10k tokens, 20-40s end-to-end against
+  `azure/gpt-5.4-mini`. Burst-tolerant per user, but costly to chain.
+- Agent state caching is per-conversation (`session_id=pinta-conv-<id>`)
+  so follow-up turns reuse the planner's state.
+- Telegram is NOT throttled in our code; pytaskforce's
+  `TelegramOutboundSender` retries 429s. For prod load, add an inbound
+  rate limiter in front of `/api/v1/agent/bot/chat`.

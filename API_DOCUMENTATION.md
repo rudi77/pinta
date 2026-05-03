@@ -1,24 +1,155 @@
 # API-Dokumentation
 
-**KI-gestützter Kostenvoranschlags-Generator für Malerbetriebe**
+**Pinta — KI-gestützter Kostenvoranschlags-Generator für Malerbetriebe**
 
-**Version:** 1.0  
-**Base URL:** `http://localhost:5000/api`  
-**Autor:** Manus AI
+**Version:** 2.x (unified agent)
+**Base URL (dev):** `http://localhost:8000`
+**Backend:** FastAPI (Python 3.11+) — der ursprüngliche Manus-AI-Scaffold
+hatte Flask im README, der aktuelle Code ist FastAPI.
 
 ---
 
 ## Übersicht
 
-Die REST API des Kostenvoranschlags-Systems bietet vollständige Funktionalität für die Verwaltung von Benutzern, Angeboten, KI-Verarbeitung und Zahlungen. Alle Endpunkte folgen RESTful-Prinzipien und verwenden JSON für Request- und Response-Daten.
+Pinta unterstützt zwei Arten von Konsumenten:
+
+1. **Web App + REST-Klienten** — JWT-basierte Authentifizierung über
+   `Authorization: Bearer <jwt_token>`. Verwenden hauptsächlich die
+   neuen `/api/v1/agent/*` Endpunkte.
+2. **Telegram-Bot (oder andere Channel-Adapter)** — eigenes Auth-Schema
+   über drei Header (`X-Bot-Service-Token`, `X-Channel`, `X-External-Id`),
+   verwenden den `/api/v1/agent/bot/*` Sub-Namespace.
+
+Beide laufen gegen denselben Agent (Manfred, pytaskforce LeanAgent),
+schreiben in dieselbe DB (`Quote`, `Document`, `Conversation`,
+`ConversationMessage`, `ChannelLink`) und teilen sich Quota,
+Material-Datenbank und PDF-Storage.
 
 ## Authentifizierung
 
-Die API verwendet JWT-Token für die Authentifizierung. Tokens werden über den `/api/auth/login` Endpunkt bezogen und müssen in allen geschützten Requests im Authorization-Header übertragen werden:
+### JWT (Web + REST-Klienten)
 
 ```
 Authorization: Bearer <jwt_token>
 ```
+
+Token wird über `/api/v1/auth/login` bezogen.
+
+### Bot-Service-Token (Channel-Adapter)
+
+```
+X-Bot-Service-Token: <langer Random-Secret aus .env BOT_SERVICE_TOKEN>
+X-Channel: telegram
+X-External-Id: <Telegram chat_id>
+X-Display-Name: Optional Klarname für Logs/UI
+```
+
+Der `BOT_SERVICE_TOKEN` ist ein einmaliger geteilter Secret zwischen
+Backend und Bot. Liegt in derselben `.env`-Datei.
+
+---
+
+## Unified Agent API (empfohlen für alle neuen Integrationen)
+
+Alle Quote-Logik geht über diese Endpoints. Sie kapseln den pytaskforce-
+Agent inkl. Tool-Use (python-Calculator, search_materials, save_quote_to_db,
+generate_quote_pdf, multimedia).
+
+### POST /api/v1/agent/chat
+
+Eine Mission ausführen, sync.
+
+**Request:**
+```json
+{
+  "message": "Schlafzimmer 14m² Wohnfläche streichen, Standard-Dispersion weiß",
+  "attachments": [
+    {"file_path": "/path/to/photo.jpg", "file_name": "raum.jpg", "type": "image"}
+  ],
+  "channel": "web"
+}
+```
+
+**Response:**
+```json
+{
+  "conversation_id": 42,
+  "final_message": "...",
+  "humanized_message": "Schlafzimmer streichen\nNetto: 770,00 EUR · MwSt 19%: 146,30 EUR · Brutto: 916,30 EUR\nAnnahme: 53,7 m² Streichfläche.\n📄 PDF kommt gleich als Download.",
+  "pdf_url": "/api/v1/agent/pdf/20260503_143012_schlafzimmer.pdf",
+  "pdf_filename": "20260503_143012_schlafzimmer.pdf",
+  "quote_number": "KV-20260503-143012-abc123",
+  "status": "completed"
+}
+```
+
+### POST /api/v1/agent/chat/stream
+
+Server-Sent Events. Jede Zeile: `data: <json>\n\n`. Event-Typen:
+`llm_token` (real-time text), `tool_call`, `tool_result`,
+`final_answer`, `channel.summary` (mit `pdf_url` und `humanized_message`).
+
+### GET /api/v1/agent/conversations
+
+Liste der Conversations des authentifizierten Users.
+
+### GET /api/v1/agent/conversations/{conversation_id}/messages
+
+Volltext-Transcript einer Conversation.
+
+### POST /api/v1/agent/reset
+
+Aktive Conversation archivieren, neue starten.
+
+### GET /api/v1/agent/pdf/{name}
+
+PDF-Download (auth-gated, Path-Traversal-geschützt).
+
+### POST /api/v1/agent/linking-token
+
+Web-User erzeugt einen 24h-Token, den er in Telegram via `/link <token>`
+einlöst. Bindet einen Telegram-Chat an den Pinta-Account.
+
+**Response:**
+```json
+{
+  "token": "abc123...",
+  "expires_at": "2026-05-04T14:30:00",
+  "channel": "telegram",
+  "instruction": "Schick im Telegram-Chat: /link abc123..."
+}
+```
+
+### Bot-Adapter Endpoints
+
+`POST /api/v1/agent/bot/chat`, `/bot/reset`, `/bot/link` — gleiche Logik
+wie die JWT-Pendants, nur mit Bot-Service-Token-Auth. Schatten-User
+werden bei erstem Kontakt automatisch angelegt.
+
+---
+
+## Legacy AI Endpoints (backward-compatible)
+
+### POST /api/v1/ai/quick-quote
+
+**Wichtig:** Dieses Endpoint hat seine **Response-Schema unverändert**
+behalten, läuft intern aber jetzt durch den unified Agent. Heißt: jeder
+Web-Quote landet ab sofort in `Conversation`/`ConversationMessage`/
+`Quote`-Tabellen — sichtbar im Web-Dashboard und (falls verlinkt) im
+Telegram-Verlauf.
+
+### POST /api/v1/ai/analyze-project, POST /api/v1/ai/generate-quote
+
+Noch auf dem Legacy-Single-Shot-`AIService`-Pfad. Werden migriert, sobald
+das Frontend auf `/api/v1/agent/chat` umsteigt.
+
+### POST /api/v1/ai/upload-document, /api/v1/ai/visual-estimate, ...
+
+Unverändert.
+
+---
+
+## Klassische Auth- und CRUD-Endpoints
 
 ## Benutzer-Endpunkte
 

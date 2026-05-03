@@ -2,10 +2,28 @@
 
 **Vollständige Projektdokumentation**
 
-**Version:** 1.0  
-**Erstellt am:** 4. Juni 2025  
-**Autor:** Manus AI  
-**Projekt:** Maler Kostenvoranschlag
+**Version:** 1.0 (Manus-AI-Scaffold) — siehe Hinweis unten
+**Erstellt am:** 4. Juni 2025
+**Autor:** Manus AI
+**Projekt:** Pinta (Maler Kostenvoranschlag)
+
+> ⚠️ **Aktualitätshinweis (2026-05-03):**
+> Dieses Dokument ist die ursprüngliche Manus-AI-Scaffold-Doku und
+> beschreibt die anfängliche Flask-Architektur. Das Projekt heißt heute
+> **Pinta**, ist auf **FastAPI** migriert und nutzt einen
+> **pytaskforce-basierten Agent** ("Manfred") für die Quote-Generierung,
+> mit einem unified Endpoint `/api/v1/agent/*` für Web App und
+> Telegram-Bot.
+>
+> **Aktuelle Quellen:**
+> - [README.md](README.md) — Projekt-Setup und -Start
+> - [CLAUDE.md](CLAUDE.md) — Architektur, ENV-Vars, Migrations,
+>   pytaskforce-Wiring, Tools-Übersicht
+> - [API_DOCUMENTATION.md](API_DOCUMENTATION.md) — REST-API inkl.
+>   neue Agent-Endpoints
+>
+> Die Sektionen unten sind als historische Referenz erhalten und in
+> Teilen veraltet (Flask, Port 5000, Manus-AI-Scaffold-Konventionen).
 
 ---
 

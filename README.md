@@ -1,255 +1,280 @@
-# KI-gestützter Kostenvoranschlags-Generator für Malerbetriebe
+# Pinta — KI-gestützter Kostenvoranschlags-Generator für Maler
 
-Ein innovatives System zur automatischen Erstellung professioneller Kostenvoranschläge mit KI-Unterstützung, OCR-Dokumentenanalyse und integriertem Payment-System.
+Pinta ist ein Werkzeug für Malerbetriebe, das Kostenvoranschläge per Chat
+oder Web-Formular erzeugt. Im Hintergrund läuft **Manfred** — ein
+pytaskforce-basierter KI-Agent, der Domänen-Wissen für Malerarbeiten in
+DE/AT mitbringt, mit Tools rechnet (deterministische Mathematik statt
+LLM-Halluzinationen), Fotos und Pläne lesen kann und am Ende ein
+professionelles A4-PDF erzeugt.
 
-## 🚀 Features
+## Wege, mit Pinta zu arbeiten
 
-- **KI-gestützte Planauswertung** - Automatische Analyse von Bauplänen und Dokumenten
-- **Natürlichsprachliche Eingabe** - Beschreiben Sie Projekte in gewöhnlicher Sprache
-- **Intelligente Rückfragen** - KI-Agent stellt gezielte Fragen für vollständige Angebote
-- **Professionelle PDF-Generierung** - Automatische Erstellung formatierter Kostenvoranschläge
-- **E-Mail-Integration** - Direkter Versand an Kunden
-- **Freemium-Modell** - 3 kostenlose Angebote pro Monat, Premium-Upgrade verfügbar
-- **Responsive Design** - Optimiert für Desktop und Mobile
+| Kanal | Login | Was geht |
+|-------|-------|----------|
+| **Web App** (React) | Pinta-Account | Voll: Quotes, Dashboard, PDFs, Stripe, Telegram-Token erzeugen |
+| **Telegram Bot** | optional verknüpft | Chat mit Manfred, Foto/PDF-Upload, PDF-Download |
+| **REST-API** | JWT | Direktintegration in eigene Tools |
 
-## 🛠 Technologie-Stack
+Beide Frontends sprechen dieselbe API (`/api/v1/agent/*`), schreiben in
+dieselbe DB und nutzen denselben Agent.
+
+## Features
+
+- **Manfred, der KI-Maler-Agent** — Prompt + Tool-Use über pytaskforce,
+  Modell konfigurierbar (Default `azure/gpt-5.4-mini`).
+- **Multimodal** — Fotos vom Raum oder mitgeschickte Pläne werden vom
+  `multimedia`-Tool gelesen, der Agent leitet daraus Mengen und
+  Vorarbeiten ab.
+- **Deterministische Mathematik** — `python`-Tool macht Flächen-,
+  Mengen-, Lohn- und MwSt-Berechnungen, kein LLM-Drift bei den Zahlen.
+- **A4-PDF-Generator** — `generate_quote_pdf` (reportlab platypus) liefert
+  einen Voranschlag, der direkt an den Endkunden weitergeschickt werden
+  kann. PDF wird als `Document`-Datensatz in der DB gespeichert.
+- **Persistente Chat-Memory** — pro User + Kanal, geteilt zwischen
+  Telegram und Web (Tabellen `conversations`, `conversation_messages`).
+- **Telegram ↔ Web verlinken** — kurzlebiger Token aus dem Dashboard,
+  paste in den Bot via `/link <token>`, Bot- und Web-Sicht teilen ab dann
+  alle Quotes, Dokumente und Conversation-Threads.
+- **Freemium-Quota** — 3 kostenlose Quotes pro Monat, Premium / Pakete
+  via Stripe.
+
+## Tech-Stack
 
 ### Frontend
-- **React 18** mit TypeScript
-- **TailwindCSS** für Styling
-- **shadcn/ui** Komponenten
+- **React 18** + TypeScript
+- **TailwindCSS** + **shadcn/ui**
 - **Vite** als Build-Tool
 
 ### Backend
-- **Flask** (Python) REST API
-- **SQLAlchemy** ORM
-- **OpenAI GPT-4o** für KI-Funktionen
-- **Tesseract OCR** für Dokumentenanalyse
+- **FastAPI** (Python 3.11+)
+- **SQLAlchemy 2.x async** (SQLite dev, PostgreSQL prod)
+- **Alembic** Migrations
+- **pytaskforce** als Agent-Framework (sibling-Repo,
+  `pip install -e ../pytaskforce`)
+- **LiteLLM** + **Azure OpenAI** (default) — auch OpenAI/Anthropic/Ollama
+  per `AGENT_LLM_MODEL_ALIAS`
+- **reportlab** für PDFs · **pdfplumber/PyPDF2** über `multimedia`-Tool
+  für PDF-Text · **Tesseract** für OCR-Pfade
 - **Stripe** für Payments
+- **Redis** optional für Caching
 
-### Services
-- **CraftMyPDF** für PDF-Generierung
-- **SMTP** für E-Mail-Versand
-- **SQLite/PostgreSQL** Datenbank
+### Telegram
+- pytaskforce-eigener `TelegramPoller` (Long-Polling, kein Webhook nötig)
+- `BackendClient` im Bot-Adapter ruft `/api/v1/agent/bot/*` über HTTP
 
-## 📋 Voraussetzungen
+## Voraussetzungen
 
-- Python 3.11+
-- Node.js 18+
-- Git
-- Tesseract OCR
+- **Python 3.11+**
+- **Node.js 18+**
+- **Git**
+- **pytaskforce-Repo** als Sibling-Verzeichnis
+  (`../pytaskforce` relativ zum Pinta-Repo)
+- Optional: Tesseract OCR + poppler-utils für Document-Pipeline
 
-## 🔧 Installation
+## Installation
 
-### 1. Repository klonen
-```bash
+### 1. Repo klonen
+```powershell
 git clone <repository-url>
-cd maler-kostenvoranschlag
+cd pinta
 ```
 
-### 2. Backend Setup
-```bash
+### 2. Backend
+```powershell
 cd backend
-python3 -m venv venv
-source venv/bin/activate  # Linux/macOS
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1   # PowerShell
 pip install -r requirements.txt
+pip install -e ..\..\pytaskforce  # editable install des Agent-Frameworks
 ```
 
-### 3. Umgebungsvariablen konfigurieren
-```bash
-cp .env.example .env
-# .env-Datei mit Ihren API-Schlüsseln bearbeiten
-```
-
-### 4. Frontend Setup
-```bash
-cd ../frontend
+### 3. Frontend
+```powershell
+cd ..\frontend
 npm install
 ```
 
-### 5. Systemdienste installieren
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install tesseract-ocr tesseract-ocr-deu poppler-utils
+### 4. `.env` (im **Repo-Root**, nicht in `backend/`)
+```ini
+# Auth
+SECRET_KEY=<min. 32 Zeichen>
+
+# OpenAI / Azure (eines reicht — Default ist Azure)
+OPENAI_API_KEY=sk-...
+AZURE_OPENAI_API_KEY=...
+AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
+AZURE_OPENAI_API_VERSION=2024-10-21
+AGENT_LLM_MODEL_ALIAS=main          # main|fast|claude-sonnet|...
+
+# Telegram (nur wenn Bot genutzt wird)
+TELEGRAM_BOT_TOKEN=<BotFather-Token>
+BOT_SERVICE_TOKEN=<langer Random-Secret-String>
+BOT_BACKEND_URL=http://127.0.0.1:8000
+
+# Stripe (in dev optional)
+STRIPE_SECRET_KEY=...
+STRIPE_PRICE_ID=...
+STRIPE_WEBHOOK_SECRET=...
+
+# E-Mail (optional)
+SMTP_HOST=...
+SMTP_USER=...
+SMTP_PASSWORD=...
 ```
 
-## 🚀 Entwicklung starten
+`BOT_SERVICE_TOKEN` generierst du z. B. mit:
+```powershell
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
 
-### Backend starten
-```bash
+### 5. Datenbank initialisieren
+```powershell
 cd backend
-source venv/bin/activate
-python src/main.py
+.\.venv\Scripts\python.exe -m alembic upgrade head
 ```
-Backend läuft auf: http://localhost:5000
 
-### Frontend starten
+### 6. (Optional) System-Tools
 ```bash
+# Linux/macOS
+sudo apt install tesseract-ocr tesseract-ocr-deu poppler-utils
+# Windows
+choco install tesseract poppler
+```
+
+## Starten
+
+### Backend
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m uvicorn src.main:app --port 8000 --reload
+```
+→ http://localhost:8000  ·  Health: http://localhost:8000/health
+
+### Frontend
+```powershell
 cd frontend
 npm run dev
 ```
-Frontend läuft auf: http://localhost:5173
+→ http://localhost:5173
 
-## 📁 Projektstruktur
+### Telegram-Bot
+```powershell
+backend\.venv\Scripts\python.exe scripts\run_telegram_bot.py
+```
+Long-Polling, kein Webhook nötig. Bricht beim Start ab, falls
+`TELEGRAM_BOT_TOKEN` oder `BOT_SERVICE_TOKEN` fehlen — mit klarer
+Anweisung was zu setzen ist.
+
+## Projektstruktur
 
 ```
-maler-kostenvoranschlag/
+pinta/
 ├── backend/
 │   ├── src/
-│   │   ├── models/          # Datenbankmodelle
-│   │   ├── routes/          # API-Endpunkte
-│   │   ├── services/        # Business Logic
-│   │   └── main.py          # Flask-App
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/
-│   ├── src/
-│   │   ├── components/      # React-Komponenten
-│   │   ├── hooks/           # Custom Hooks
-│   │   └── App.jsx
-│   ├── package.json
-│   └── vite.config.js
-├── DOCUMENTATION.md         # Technische Dokumentation
-├── API_DOCUMENTATION.md     # API-Referenz
-├── BENUTZERHANDBUCH.md     # Benutzeranleitung
+│   │   ├── agents/             # pytaskforce-Wiring
+│   │   │   ├── factory.py      # warm AgentFactory, register Pinta-Tools
+│   │   │   ├── taskforce_setup.py
+│   │   │   └── tools/          # search_materials, save_quote_to_db,
+│   │   │                       #   generate_quote_pdf
+│   │   ├── core/               # database, security, settings, cache
+│   │   ├── models/models.py    # User, Quote, QuoteItem, Document,
+│   │   │                       #   Conversation, ConversationMessage,
+│   │   │                       #   ChannelLink, MaterialPrice, …
+│   │   ├── routes/             # auth, users, quotes, ai, payments,
+│   │   │                       #   chat, documents, quota, materials,
+│   │   │                       #   agent  ← unified endpoint
+│   │   ├── services/           # agent_service, channel_link_service,
+│   │   │                       #   ai_service (legacy), quote_calculator,
+│   │   │                       #   rag_service, pdf_service, …
+│   │   ├── telegram/runner.py  # Bot-Adapter (HTTP gegen agent endpoint)
+│   │   └── main.py             # FastAPI app
+│   ├── agents/maler.yaml       # System-Prompt + Tool-Liste für Manfred
+│   ├── alembic/                # DB-Migrationen
+│   ├── tests/
+│   └── requirements.txt
+├── frontend/                   # React-App (Vite + TS)
+├── scripts/
+│   ├── run_telegram_bot.py     # Standalone Bot-Runner
+│   ├── iter1_baseline.py … iter4_agent.py   # Eval-Skripte
+│   └── smoke_*.py              # diverse Smoke-Tests
+├── iteration_logs/             # JSON-Outputs + Auswertungen
+│                               #   der Quote-Generierung
+├── CLAUDE.md                   # Projekt-Doku für KI-Coding-Assistenten
+├── DOCUMENTATION.md
+├── API_DOCUMENTATION.md
+├── BENUTZERHANDBUCH.md
 └── README.md
 ```
 
-## 🔑 Umgebungsvariablen
+## Architektur (Kurzfassung)
 
-Erstellen Sie eine `.env`-Datei im Backend-Verzeichnis:
-
-```env
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key
-
-# CraftMyPDF
-CRAFTMYPDF_API_KEY=your_craftmypdf_api_key
-CRAFTMYPDF_TEMPLATE_ID=your_template_id
-
-# E-Mail
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your_email@gmail.com
-SMTP_PASSWORD=your_app_password
-
-# Stripe
-STRIPE_PUBLISHABLE_KEY=pk_test_your_key
-STRIPE_SECRET_KEY=sk_test_your_key
-STRIPE_WEBHOOK_SECRET=whsec_your_secret
-
-# Firma
-COMPANY_NAME=Ihr Malerbetrieb
-COMPANY_EMAIL=info@malerbetrieb.de
-COMPANY_PHONE=+49 123 456789
+```
+React Web App ──┐                     ┌── Telegram-Bot (Long-Polling)
+                │                     │
+                ▼ HTTP/JWT            ▼ HTTP/Bot-Service-Token
+   ┌──────────────────────────────────────────┐
+   │          FastAPI Backend                  │
+   │  /api/v1/agent/chat[/stream]              │
+   │  /api/v1/agent/bot/{chat,reset,link}      │
+   │  /api/v1/auth /quotes /documents /…       │
+   │            ↓                              │
+   │  AgentService → pytaskforce LeanAgent     │
+   │  Tools: python, multimedia,               │
+   │         search_materials,                 │
+   │         save_quote_to_db,                 │
+   │         generate_quote_pdf                │
+   └────────────┬──────────────────────────────┘
+                ▼
+        ┌─────────────────────┐
+        │  Pinta DB (Single-  │
+        │  Source-of-Truth)   │
+        └─────────────────────┘
 ```
 
-## 📖 Dokumentation
+Details: siehe [`CLAUDE.md`](CLAUDE.md).
 
-- **[Technische Dokumentation](DOCUMENTATION.md)** - Architektur und Implementierung
-- **[API-Dokumentation](API_DOCUMENTATION.md)** - REST API Referenz
-- **[Benutzerhandbuch](BENUTZERHANDBUCH.md)** - Anleitung für Endbenutzer
+## Telegram-Verknüpfung Web ↔ Bot
 
-## 🧪 Testing
+1. Im Web-Dashboard: `POST /api/v1/agent/linking-token` → Token (24 h gültig).
+2. Im Telegram an Manfred schreiben: `/link <token>`.
+3. Ab dann: alle bisherigen anonymen Schatten-Conversations dieses
+   Telegram-Chats wandern auf den Pinta-Account, neue Quotes erscheinen
+   sofort im Dashboard.
 
-### Backend Tests
-```bash
-cd backend
-source venv/bin/activate
-python -m pytest tests/
+## Tests
+
+```powershell
+# Alle Suites
+python scripts/run_tests.py all
+
+# Einzelne
+python scripts/run_tests.py auth | quotes | ai | documents | users
+
+# Coverage
+python scripts/run_tests.py coverage
+make test
 ```
 
-### Frontend Tests
-```bash
-cd frontend
-npm test
-```
+Tests nutzen In-Memory-SQLite und mocken AI-Calls. Smoke-Tests für den
+Quote-Calculator und den Prompt-Builder unter `backend/tests/`.
 
-## 🚀 Deployment
+## Entwickler-Workflow
 
-### Produktions-Build
-```bash
-# Frontend Build
-cd frontend
-npm run build
+- Neue Domain-Logik bevorzugt als pytaskforce-Tool
+  (`backend/src/agents/tools/<name>.py` + Eintrag in
+  `factory.register_pinta_tools`). Siehe `save_quote_to_db.py` als
+  Vorlage.
+- Neue API-Endpoints unter `backend/src/routes/agent.py` (für
+  Agent-bezogene Aktionen) oder als eigene Route-Datei (für klassische
+  CRUD).
+- Schema-Änderungen: Models in `backend/src/models/models.py` editieren,
+  dann `alembic revision --autogenerate -m "msg"`.
 
-# Backend für Produktion konfigurieren
-cd ../backend
-# Umgebungsvariablen für Produktion setzen
-# WSGI-Server wie Gunicorn verwenden
-```
+## Lizenz
 
-### Docker (Optional)
-```bash
-# Docker-Images erstellen
-docker-compose build
+MIT — siehe [LICENSE](LICENSE).
 
-# Services starten
-docker-compose up -d
-```
+## Status
 
-## 🔒 Sicherheit
-
-- Alle API-Endpunkte sind durch CORS geschützt
-- JWT-Token für Authentifizierung
-- Verschlüsselte Datenübertragung (HTTPS)
-- DSGVO-konforme Datenspeicherung
-- Sichere Stripe-Integration mit Webhook-Verifizierung
-
-## 📊 Features im Detail
-
-### KI-Funktionen
-- **Dokumentenanalyse**: OCR-basierte Texterkennung aus Plänen und Fotos
-- **Intelligente Extraktion**: Automatische Erkennung von Räumen, Maßen und Arbeitstypen
-- **Rückfrage-System**: Gezielte Nachfragen bei unvollständigen Informationen
-- **Preisberechnung**: KI-gestützte Kalkulation basierend auf Marktdaten
-
-### Business-Features
-- **Freemium-Modell**: 3 kostenlose Angebote/Monat
-- **Premium-Abonnement**: Unbegrenzte Angebote für 29,99€/Monat
-- **Zusatzkäufe**: 10 Angebote für 19,99€
-- **Automatische Abrechnung**: Stripe-Integration mit Webhooks
-
-### Benutzerfreundlichkeit
-- **Responsive Design**: Optimiert für alle Geräte
-- **Intuitive Navigation**: Klare Benutzerführung
-- **Demo-Modus**: Sofortiger Test ohne Registrierung
-- **Mehrsprachig**: Deutsch als Hauptsprache
-
-## 🤝 Beitragen
-
-1. Fork des Repositories
-2. Feature-Branch erstellen (`git checkout -b feature/AmazingFeature`)
-3. Änderungen committen (`git commit -m 'Add some AmazingFeature'`)
-4. Branch pushen (`git push origin feature/AmazingFeature`)
-5. Pull Request erstellen
-
-## 📝 Lizenz
-
-Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) für Details.
-
-## 📞 Support
-
-- **E-Mail**: support@maler-kostenvoranschlag.de
-- **Dokumentation**: Siehe Dokumentations-Dateien
-- **Issues**: GitHub Issues für Bug-Reports und Feature-Requests
-
-## 🎯 Roadmap
-
-- [ ] Mobile App (React Native)
-- [ ] Erweiterte KI-Modelle
-- [ ] Integration mit Buchhaltungssoftware
-- [ ] Multi-Tenant-Architektur
-- [ ] API für Drittanbieter
-- [ ] Erweiterte Reporting-Features
-
-## 👥 Team
-
-Entwickelt von **Manus AI** - Spezialisiert auf KI-gestützte Business-Lösungen.
-
----
-
-**Version**: 1.0  
-**Letztes Update**: 4. Juni 2025
-
+Pinta ist im aktiven Pre-Launch-Aufbau (siehe `iteration_logs/` für die
+Quote-Qualitäts-Iterationen). Erste Maler-Tests stehen kurz bevor.
