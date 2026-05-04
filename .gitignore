@@ -236,3 +236,6 @@ traces/
 .playwright-mcp/
 frontend/playwright-report/
 frontend/test-results/
+
+# Stray Playwright-MCP screenshots saved at the repo root
+/*.png
