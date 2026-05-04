@@ -1,9 +1,10 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
-const PrivateRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+const PrivateRoute = ({ children, allowWithoutOnboarding = false }) => {
+  const { isAuthenticated, loading, onboardingComplete } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return <div>Lade Authentifizierung...</div>;
@@ -13,7 +14,15 @@ const PrivateRoute = ({ children }) => {
     return <Navigate to="/login" />;
   }
 
+  if (
+    !onboardingComplete &&
+    !allowWithoutOnboarding &&
+    location.pathname !== '/onboarding'
+  ) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   return children;
 };
 
-export default PrivateRoute; 
+export default PrivateRoute;

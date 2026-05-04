@@ -226,3 +226,13 @@ iteration_logs/**/_console*.log
 backend/.taskforce_maler/
 backend/.taskforce_smoke/
 traces/
+
+# Claude Code local state (per-developer, not for the repo)
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+.claude/plans/
+
+# Playwright artifacts (regenerated on every run)
+.playwright-mcp/
+frontend/playwright-report/
+frontend/test-results/

@@ -230,6 +230,34 @@ class ApiClient {
     return await this.fetchAuthenticatedBlob(url);
   }
 
+  async fetchAgentPdfByQuoteId(quoteId) {
+    const info = await this.request(`/quotes/${quoteId}/agent-pdf-info`);
+    if (!info?.pdf_url) throw new Error('PDF URL fehlt');
+    const blob = await this.fetchAgentPdf(info.pdf_url);
+    return { blob, filename: info.pdf_filename };
+  }
+
+  // Onboarding
+  async getOnboardingStatus() {
+    return await this.request('/onboarding/status');
+  }
+
+  async completeOnboarding(payload) {
+    return await this.request('/onboarding/complete', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async uploadLogo(file) {
+    const form = new FormData();
+    form.append('file', file);
+    return await this.request('/onboarding/logo', {
+      method: 'POST',
+      body: form,
+    });
+  }
+
   async fetchAuthenticatedBlob(url) {
     const token = localStorage.getItem('access_token');
     const response = await fetch(url, {
@@ -282,23 +310,6 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
-  }
-
-  async downloadQuotePdf(quoteId) {
-    const token = localStorage.getItem('access_token');
-    const base = (import.meta.env && import.meta.env.VITE_API_BASE_URL) ? import.meta.env.VITE_API_BASE_URL : '';
-    const prefix = base ? '/api/v1' : '/api';
-    const url = `${base}${prefix}/quotes/${quoteId}/pdf/generate`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({}),
-    });
-    if (!response.ok) throw new Error(`PDF generation failed: ${response.status}`);
-    return response;
   }
 
   async uploadDocument(formData) {

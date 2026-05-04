@@ -336,8 +336,17 @@ class UserUpdate(BaseModel):
     company_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    vat_id: Optional[str] = Field(None, max_length=32)
     hourly_rate: HourlyRate = None
     material_cost_markup: MaterialCostMarkup = None
+
+
+class OnboardingPayload(BaseModel):
+    company_name: str = Field(..., min_length=2, max_length=100)
+    address: str = Field(..., min_length=2)
+    vat_id: Optional[str] = Field(None, max_length=32)
+    hourly_rate: float = Field(..., ge=0, le=500)
+    material_cost_markup: float = Field(..., ge=0, le=100)
 
 class QuoteUpdate(QuoteBase):
     items: Optional[List[QuoteItemBase]] = None
@@ -357,17 +366,26 @@ class UserResponse(BaseModel):
     company_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    vat_id: Optional[str] = None
+    logo_path: Optional[str] = None
     is_premium: bool = False
     premium_until: Optional[datetime] = None
     quotes_this_month: int = 0
     additional_quotes: int = 0
     hourly_rate: Optional[float] = None
     material_cost_markup: Optional[float] = None
+    onboarding_completed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class OnboardingStatus(BaseModel):
+    completed: bool
+    missing: List[str]
+    user: UserResponse
 
 class QuoteItemResponse(QuoteItemBase):
     id: int

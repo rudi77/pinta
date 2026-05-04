@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { mockAgentPdf, mockAgentQuote, mockAuthenticatedUser } from './helpers/apiMocks.js';
 
-test.describe('agent quote chat', () => {
-  test('sends a message to the unified agent and surfaces quote actions', async ({ page }) => {
+test.describe('quote chat', () => {
+  test('sends a message and surfaces quote actions + PDF download', async ({ page }) => {
     await mockAuthenticatedUser(page);
     await mockAgentQuote(page);
     let pdfAuthorizationHeader = null;
@@ -10,8 +10,8 @@ test.describe('agent quote chat', () => {
       pdfAuthorizationHeader = request.headers().authorization;
     });
 
-    await page.goto('/chat-quote');
-    await page.getByPlaceholder('Beschreiben Sie Ihr Projekt...').fill(
+    await page.goto('/quote/new');
+    await page.getByPlaceholder('Projekt beschreiben…').fill(
       'Wohnzimmer 25 m2 weiss streichen, Decke mitmachen.',
     );
     await page.keyboard.press('Enter');
@@ -25,5 +25,12 @@ test.describe('agent quote chat', () => {
 
     await page.getByRole('button', { name: 'PDF öffnen' }).first().click();
     await expect.poll(() => pdfAuthorizationHeader).toBe('Bearer test-access-token');
+  });
+
+  test('back-link returns to dashboard', async ({ page }) => {
+    await mockAuthenticatedUser(page);
+    await page.goto('/quote/new');
+    await page.getByRole('link', { name: /Zurück zum Dashboard/ }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
   });
 });

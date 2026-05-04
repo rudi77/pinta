@@ -74,32 +74,18 @@ const QuoteDetail = () => {
     if (!quote) return;
     setActionLoading(true);
     setError(null);
+    let url = null;
     try {
-      const response = await apiClient.downloadQuotePdf(quote.id);
-      const data = await response.json();
-      let blob = null;
-      if (data.pdf_info?.pdf_base64) {
-        const byteChars = atob(data.pdf_info.pdf_base64);
-        const byteArray = new Uint8Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteArray[i] = byteChars.charCodeAt(i);
-        }
-        blob = new Blob([byteArray], { type: 'application/pdf' });
-      } else if (data.pdf_info?.download_url) {
-        const downloadUrl = apiClient.getPublicApiUrl(data.pdf_info.download_url);
-        blob = await apiClient.fetchAuthenticatedBlob(downloadUrl);
-      } else {
-        throw new Error('PDF-Antwort enthält keine Datei');
-      }
-      const url = URL.createObjectURL(blob);
+      const { blob } = await apiClient.fetchAgentPdfByQuoteId(quote.id);
+      url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `${quote.quote_number}.pdf`;
       link.click();
-      URL.revokeObjectURL(url);
     } catch (err) {
       setError(err.message || 'PDF konnte nicht erzeugt werden');
     } finally {
+      if (url) URL.revokeObjectURL(url);
       setActionLoading(false);
     }
   };
@@ -167,8 +153,8 @@ const QuoteDetail = () => {
           <Button onClick={handleDownloadPdf} disabled={actionLoading}>
             PDF herunterladen
           </Button>
-          <Button variant="outline" onClick={() => navigate('/new-quote')} disabled={actionLoading}>
-            Bearbeiten
+          <Button variant="outline" onClick={() => navigate('/quote/new')} disabled={actionLoading}>
+            Neues Angebot
           </Button>
           <Button variant="outline" onClick={handleDuplicate} disabled={actionLoading}>
             Duplizieren
@@ -259,11 +245,11 @@ const QuoteDetail = () => {
 
       {quote.conversation_history && quote.conversation_history.length > 0 && (
         <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">KI-Konversationsverlauf</h2>
+          <h2 className="text-lg font-semibold mb-4">Chat-Verlauf</h2>
           <div className="space-y-4">
             {quote.conversation_history.map((msg, index) => (
               <div key={index} className={`p-4 rounded-lg ${msg.role === 'assistant' ? 'bg-purple-50' : 'bg-gray-50'}`}>
-                <p className="font-medium mb-2">{msg.role === 'assistant' ? 'KI-Assistent' : 'Nutzer'}</p>
+                <p className="font-medium mb-2">{msg.role === 'assistant' ? 'Pinta' : 'Du'}</p>
                 <p className="text-gray-700">{msg.content}</p>
               </div>
             ))}

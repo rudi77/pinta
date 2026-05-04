@@ -40,6 +40,11 @@ class User(Base):
     hourly_rate = Column(Float, nullable=True)
     material_cost_markup = Column(Float, nullable=True)
 
+    # Onboarding (added in migration 007)
+    vat_id = Column(String(32), nullable=True)
+    logo_path = Column(String(500), nullable=True)
+    onboarding_completed_at = Column(DateTime, nullable=True)
+
     # Stripe integration
     stripe_customer_id = Column(String(255))
     stripe_subscription_id = Column(String(255))

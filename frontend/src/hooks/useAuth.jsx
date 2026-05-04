@@ -124,6 +124,16 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const refreshUser = async () => {
+    const userData = await apiClient.getCurrentUser();
+    setUser(userData);
+    return userData;
+  };
+
+  // Demo-User has no real onboarding profile — skip the gate so testers
+  // land on the dashboard immediately.
+  const onboardingComplete = demoMode || !!user?.onboarding_completed_at;
+
   // Context value
   const value = {
     isAuthenticated,
@@ -131,10 +141,12 @@ export function AuthProvider({ children }) {
     loading,
     error,
     demoMode,
+    onboardingComplete,
     login,
     demoLogin,
     logout,
-    register
+    register,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

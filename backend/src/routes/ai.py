@@ -597,12 +597,22 @@ async def upload_document_for_analysis(
     try:
         logger.info(f"Processing document upload for user {current_user.id}")
         
-        # Validate file type
-        allowed_types = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+        # Validate file type. Telegram sometimes sends image/heic or
+        # application/octet-stream — accept those too; the agent's
+        # multimedia tool handles the actual content sniffing.
+        allowed_types = {
+            'application/pdf',
+            'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif',
+            'image/gif', 'image/svg+xml',
+            'application/octet-stream',
+        }
         if file.content_type not in allowed_types:
             raise HTTPException(
-                status_code=400, 
-                detail="Unsupported file type. Please upload PDF, JPEG, PNG, or WebP files."
+                status_code=400,
+                detail=(
+                    f"Dateityp '{file.content_type}' wird nicht unterstützt. "
+                    "Bitte PDF oder Bild (JPG/PNG/WebP/HEIC) hochladen."
+                ),
             )
         
         # Read file content

@@ -5,8 +5,14 @@ from sqlalchemy import select, update, func
 from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime
+from pathlib import Path
 import uuid
 import json
+
+# Agent-generated PDFs land here (same path as routes/agent.py:_QUOTES_DIR).
+_AGENT_QUOTES_DIR = (
+    Path(__file__).resolve().parents[2] / ".taskforce_maler" / "quotes"
+)
 
 from src.core.database import get_db
 from src.routes.auth import get_current_user
@@ -112,23 +118,36 @@ def quote_to_response(quote):
 @router.get("/", response_model=List[QuoteResponse])
 async def get_quotes(
     status_filter: Optional[str] = None,
+    q: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all quotes for current user"""
-    
+    """Get all quotes for current user. Supports `q` substring search across
+    customer_name, project_title and quote_number (case-insensitive)."""
+
     query = select(Quote).where(Quote.user_id == current_user.id)
-    
+
     if status_filter:
         query = query.where(Quote.status == status_filter)
-    
+
+    if q:
+        from sqlalchemy import or_, func as sa_func
+        needle = f"%{q.lower()}%"
+        query = query.where(
+            or_(
+                sa_func.lower(Quote.customer_name).like(needle),
+                sa_func.lower(Quote.project_title).like(needle),
+                sa_func.lower(Quote.quote_number).like(needle),
+            )
+        )
+
     query = query.options(selectinload(Quote.quote_items)).order_by(Quote.created_at.desc()).limit(limit).offset(offset)
-    
+
     result = await db.execute(query)
     quotes = result.scalars().all()
-    
+
     return [quote_to_response(q) for q in quotes]
 
 @router.post("/", response_model=QuoteResponse)
@@ -493,14 +512,22 @@ async def duplicate_quote(
     
     return quote_to_response(new_quote)
 
-@router.post("/{quote_id}/pdf/generate", response_model=PDFGenerationResponse)
+@router.post(
+    "/{quote_id}/pdf/generate",
+    response_model=PDFGenerationResponse,
+    deprecated=True,
+)
 async def generate_quote_pdf(
     quote_id: int,
     options: Optional[PDFGenerationOptions] = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Generate professional PDF for quote"""
+    """DEPRECATED. Use GET /quotes/{id}/agent-pdf-info → GET /agent/pdf/{name}.
+
+    Legacy ProfessionalPDFService path; agent-generated quotes won't have
+    a file under uploads/pdfs/, so this returns 404 for them.
+    """
     
     # Get quote with items
     result = await db.execute(
@@ -543,13 +570,17 @@ async def generate_quote_pdf(
             detail=f"PDF generation failed: {str(e)}"
         )
 
-@router.get("/{quote_id}/pdf/download")
+@router.get("/{quote_id}/pdf/download", deprecated=True)
 async def download_quote_pdf(
     quote_id: int,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Download generated PDF. Requires payment or premium subscription."""
+    """DEPRECATED. Use GET /quotes/{id}/agent-pdf-info → GET /agent/pdf/{name}.
+
+    Legacy file lookup in uploads/pdfs/; agent-generated quotes are in
+    .taskforce_maler/quotes/ and won't be found here.
+    """
 
     # Verify quote ownership
     result = await db.execute(
@@ -593,6 +624,54 @@ async def download_quote_pdf(
         filename=f"{quote.quote_number}.pdf",
         media_type='application/pdf'
     )
+
+
+@router.get("/{quote_id}/agent-pdf-info")
+async def get_agent_pdf_info(
+    quote_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Resolve a Quote → its agent-generated PDF in `.taskforce_maler/quotes/`.
+
+    Returns `{pdf_url, pdf_filename}` so the frontend can hand the URL to
+    `GET /api/v1/agent/pdf/{name}` (auth-gated, path-traversal-protected).
+    """
+    result = await db.execute(
+        select(Quote)
+        .where(Quote.id == quote_id)
+        .where(Quote.user_id == current_user.id)
+    )
+    quote = result.scalar_one_or_none()
+    if not quote:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Kostenvoranschlag nicht gefunden",
+        )
+
+    if not _AGENT_QUOTES_DIR.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF nicht gefunden. Bitte über den Chat erneut anstoßen.",
+        )
+
+    matches = sorted(
+        (p for p in _AGENT_QUOTES_DIR.glob(f"*{quote.quote_number}*.pdf") if p.is_file()),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not matches:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="PDF nicht gefunden. Bitte über den Chat erneut anstoßen.",
+        )
+
+    filename = matches[0].name
+    return {
+        "pdf_filename": filename,
+        "pdf_url": f"/api/v1/agent/pdf/{filename}",
+    }
+
 
 @router.post("/{quote_id}/export", response_model=ExportResponse)
 async def export_quote(

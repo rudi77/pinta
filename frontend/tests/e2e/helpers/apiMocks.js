@@ -4,6 +4,7 @@ export const demoUser = {
   email: 'demo@example.com',
   company_name: 'Demo Malerbetrieb',
   is_premium: true,
+  onboarding_completed_at: '2026-05-04T08:00:00Z',
 };
 
 export const sampleQuote = {
@@ -39,15 +40,65 @@ export const sampleQuote = {
 };
 
 export async function mockAuthenticatedUser(page, user = demoUser) {
+  // Default to onboarded so the gate doesn't redirect tests; pass
+  // `onboarding_completed_at: null` explicitly to test the gate.
+  const fullUser = {
+    onboarding_completed_at: '2026-05-04T08:00:00Z',
+    ...user,
+  };
   await page.addInitScript(() => {
     window.localStorage.setItem('access_token', 'test-access-token');
   });
   await page.route(/\/api(\/v1)?\/auth\/me$/, async (route) => {
-    await route.fulfill({ json: user });
+    await route.fulfill({ json: fullUser });
+  });
+}
+
+export async function mockOnboardingStatus(page, { completed = false, missing = ['address', 'hourly_rate'] } = {}) {
+  await page.route(/\/api(\/v1)?\/onboarding\/status$/, async (route) => {
+    await route.fulfill({
+      json: {
+        completed,
+        missing,
+        user: { ...demoUser, onboarding_completed_at: completed ? demoUser.onboarding_completed_at : null },
+      },
+    });
+  });
+}
+
+export async function mockOnboardingComplete(page) {
+  await page.route(/\/api(\/v1)?\/onboarding\/complete$/, async (route) => {
+    const body = route.request().postDataJSON();
+    await route.fulfill({
+      json: {
+        ...demoUser,
+        company_name: body.company_name,
+        address: body.address,
+        vat_id: body.vat_id || null,
+        hourly_rate: body.hourly_rate,
+        material_cost_markup: body.material_cost_markup,
+        onboarding_completed_at: '2026-05-04T08:00:00Z',
+      },
+    });
+  });
+}
+
+export async function mockAgentPdfInfo(page, quoteId = sampleQuote.id) {
+  await page.route(new RegExp(`/api(/v1)?/quotes/${quoteId}/agent-pdf-info$`), async (route) => {
+    await route.fulfill({
+      json: {
+        pdf_filename: 'demo-quote.pdf',
+        pdf_url: '/api/v1/agent/pdf/demo-quote.pdf',
+      },
+    });
   });
 }
 
 export async function mockDemoLogin(page, user = demoUser) {
+  const fullUser = {
+    onboarding_completed_at: '2026-05-04T08:00:00Z',
+    ...user,
+  };
   await page.route(/\/api(\/v1)?\/auth\/demo-login$/, async (route) => {
     await route.fulfill({
       json: {
@@ -58,7 +109,7 @@ export async function mockDemoLogin(page, user = demoUser) {
     });
   });
   await page.route(/\/api(\/v1)?\/auth\/me$/, async (route) => {
-    await route.fulfill({ json: user });
+    await route.fulfill({ json: fullUser });
   });
 }
 

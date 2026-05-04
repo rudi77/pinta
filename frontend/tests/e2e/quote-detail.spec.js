@@ -1,19 +1,21 @@
 import { expect, test } from '@playwright/test';
 import {
+  mockAgentPdf,
+  mockAgentPdfInfo,
   mockAuthenticatedUser,
   mockDuplicateQuote,
   mockQuoteDetail,
-  mockQuotePdfGenerate,
   mockUpdateQuoteStatus,
   sampleQuote,
 } from './helpers/apiMocks.js';
 
 test.describe('quote detail actions', () => {
-  test('shows old quote actions and downloads PDFs with auth', async ({ page }) => {
+  test('downloads agent-generated PDF with auth', async ({ page }) => {
     await mockAuthenticatedUser(page);
     await mockQuoteDetail(page);
+    await mockAgentPdfInfo(page, sampleQuote.id);
     let pdfAuthorizationHeader = null;
-    await mockQuotePdfGenerate(page, sampleQuote.id, (request) => {
+    await mockAgentPdf(page, (request) => {
       pdfAuthorizationHeader = request.headers().authorization;
     });
 
@@ -21,7 +23,7 @@ test.describe('quote detail actions', () => {
 
     await expect(page.getByRole('heading', { name: `Angebot ${sampleQuote.quote_number}` })).toBeVisible();
     await expect(page.getByRole('button', { name: 'PDF herunterladen' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Bearbeiten' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Neues Angebot' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Duplizieren' })).toBeVisible();
     await expect(page.getByLabel('Status ändern')).toHaveValue('draft');
 

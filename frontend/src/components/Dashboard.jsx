@@ -8,6 +8,8 @@ import { useNavigate } from 'react-router-dom';
 const Dashboard = () => {
   const { user, demoMode } = useAuth();
   const [quotes, setQuotes] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [stats, setStats] = useState({
     totalQuotes: 0,
     thisMonth: 0,
@@ -17,6 +19,11 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 250);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -61,7 +68,9 @@ const Dashboard = () => {
           });
         } else {
           // Load real data from API
-          const quotesData = await apiClient.getQuotes({ limit: 10 });
+          const params = { limit: 50 };
+          if (debouncedSearch) params.q = debouncedSearch;
+          const quotesData = await apiClient.getQuotes(params);
           setQuotes(quotesData);
           
           // Calculate stats
@@ -87,7 +96,7 @@ const Dashboard = () => {
     };
 
     loadDashboardData();
-  }, [demoMode]);
+  }, [demoMode, debouncedSearch]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -207,8 +216,16 @@ const Dashboard = () => {
 
       {/* Recent Quotes */}
       <div className="bg-white rounded-lg shadow-md">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h2 className="text-xl font-semibold text-gray-900">Letzte Angebote</h2>
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Kunde, Projekt oder Angebotsnummer suchen…"
+            aria-label="Angebote durchsuchen"
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none md:w-80"
+          />
         </div>
         
         <div className="overflow-x-auto">
@@ -270,35 +287,36 @@ const Dashboard = () => {
 
         {quotes.length === 0 && (
           <div className="px-6 py-8 text-center">
-            <p className="text-gray-500">Noch keine Angebote erstellt.</p>
-            <button
-              onClick={() => navigate('/new-quote')}
-              className="mt-4 bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-            >
-              Erstes Angebot erstellen
-            </button>
+            {debouncedSearch ? (
+              <p className="text-gray-500">
+                Keine Angebote für „{debouncedSearch}". Versuch einen
+                anderen Suchbegriff.
+              </p>
+            ) : (
+              <>
+                <p className="text-gray-500">Noch keine Angebote erstellt.</p>
+                <button
+                  onClick={() => navigate('/quote/new')}
+                  className="mt-4 bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                >
+                  Erstes Angebot erstellen
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+      <div className="mt-8">
         <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-4">Neuen Kostenvoranschlag erstellen</h3>
-          <div className="space-y-4">
-            <Button
-              onClick={() => navigate('/new-quote')}
-              className="w-full"
-            >
-              Klassischer Editor
-            </Button>
-            <Button
-              onClick={() => navigate('/chat-quote')}
-              className="w-full"
-              variant="outline"
-            >
-              KI-Assistent
-            </Button>
-          </div>
+          <h3 className="text-lg font-semibold mb-1">Neues Angebot</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Beschreibe das Projekt im Chat — Foto oder PDF-Plan kannst du
+            mitschicken. Der Rest läuft automatisch.
+          </p>
+          <Button onClick={() => navigate('/quote/new')} className="w-full">
+            Neues Angebot starten
+          </Button>
         </Card>
       </div>
     </div>

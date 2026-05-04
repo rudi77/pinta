@@ -32,7 +32,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.factory import create_maler_agent, warm_factory
-from src.models.models import Conversation, ConversationMessage, User
+from src.models.models import Conversation, ConversationMessage, Quote, User
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 # so we inject context as a plain prefix in the mission string.
 _MAX_HISTORY_TURNS = 8
 _MAX_HISTORY_CHARS_PER_TURN = 1500
+# How many of the user's most recent saved quotes to splice into a new
+# mission as a "you priced these recently" prompt — schlankes Memory.
+_QUOTE_MEMORY_LIMIT = 5
 
 # Where generate_quote_pdf writes finished PDFs (also used by the FS-fallback
 # detection in the runner / chat endpoint).
@@ -132,25 +135,60 @@ class AgentService:
         rows.reverse()
         return rows
 
+    async def recent_quotes(
+        self, db: AsyncSession, user: User,
+        *, limit: int = _QUOTE_MEMORY_LIMIT,
+    ) -> list[Quote]:
+        stmt = (
+            select(Quote)
+            .where(Quote.user_id == user.id)
+            .order_by(Quote.id.desc())
+            .limit(limit)
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
     # ── mission building ─────────────────────────────────────────────────
 
     @staticmethod
     def build_mission_with_history(
         prior_messages: list[ConversationMessage], new_user_text: str,
+        *, prior_quotes: Optional[list[Quote]] = None,
     ) -> str:
-        if not prior_messages:
+        sections: list[str] = []
+
+        if prior_quotes:
+            sections.append(
+                "Letzte Angebote dieses Nutzers (zur Orientierung bei "
+                "Preisen / Stil — KEIN Auftrag, nur Kontext):"
+            )
+            for q in prior_quotes:
+                created = q.created_at.strftime("%Y-%m-%d") if q.created_at else "—"
+                customer = (q.customer_name or "—").strip() or "—"
+                title = (q.project_title or "—").strip() or "—"
+                total = q.total_amount if q.total_amount is not None else 0.0
+                sections.append(
+                    f"- {q.quote_number}: {title}, Brutto {total:.2f} EUR, "
+                    f"am {created}, Kunde {customer}"
+                )
+            sections.append("")
+
+        if prior_messages:
+            sections.append("Bisheriger Chat-Verlauf (älteste zuerst, gekürzt):")
+            for m in prior_messages:
+                role = "Nutzer" if m.role == "user" else "Du"
+                content = (m.content or "").strip()
+                if len(content) > _MAX_HISTORY_CHARS_PER_TURN:
+                    content = content[: _MAX_HISTORY_CHARS_PER_TURN - 1] + "…"
+                sections.append(f"- **{role}:** {content}")
+            sections.append("")
+
+        if not sections:
             return new_user_text
-        lines = ["Bisheriger Chat-Verlauf (älteste zuerst, gekürzt):"]
-        for m in prior_messages:
-            role = "Nutzer" if m.role == "user" else "Du"
-            content = (m.content or "").strip()
-            if len(content) > _MAX_HISTORY_CHARS_PER_TURN:
-                content = content[: _MAX_HISTORY_CHARS_PER_TURN - 1] + "…"
-            lines.append(f"- **{role}:** {content}")
-        lines.append("")
-        lines.append("Aktuelle Nachricht des Nutzers:")
-        lines.append(new_user_text)
-        return "\n".join(lines)
+
+        sections.append("Aktuelle Nachricht des Nutzers:")
+        sections.append(new_user_text)
+        return "\n".join(sections)
 
     @staticmethod
     def session_id_for(conversation: Conversation) -> str:
@@ -242,12 +280,13 @@ class AgentService:
         await self.start()
         conv = await self.get_active_conversation(db, user, channel=channel)
         prior = await self.recent_messages(db, conv)
+        prior_quotes = await self.recent_quotes(db, user)
 
         body = (
             f"{attachments_block}\n\n{mission_text}".strip()
             if attachments_block else mission_text
         )
-        mission = self.build_mission_with_history(prior, body)
+        mission = self.build_mission_with_history(prior, body, prior_quotes=prior_quotes)
 
         # Persist the user turn BEFORE running so a crash mid-mission
         # still leaves a coherent transcript.
@@ -374,11 +413,12 @@ class AgentService:
         await self.start()
         conv = await self.get_active_conversation(db, user, channel=channel)
         prior = await self.recent_messages(db, conv)
+        prior_quotes = await self.recent_quotes(db, user)
         body = (
             f"{attachments_block}\n\n{mission_text}".strip()
             if attachments_block else mission_text
         )
-        mission = self.build_mission_with_history(prior, body)
+        mission = self.build_mission_with_history(prior, body, prior_quotes=prior_quotes)
 
         await self.append_message(db, conv, role="user", content=mission_text)
         await db.commit()

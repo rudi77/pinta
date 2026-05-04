@@ -1,3 +1,13 @@
+# NOTE: A handful of legacy class-based suites are still in this directory
+# (test_auth_integration.py, test_users_integration.py,
+# test_quotes_integration.py, test_ai_integration.py,
+# test_documents_integration.py). They reference endpoints from an older
+# API design (e.g. /users/statistics, /users/settings, OAuth2-form login
+# with `username=`) that were never implemented or have since been removed.
+# They run but fail with 404/422 — pre-existing brokenness, not async
+# misconfig. The CI gate in .github/workflows/ci.yml runs only the
+# deterministic MVP suites; cleaning up the legacy suites is tracked as
+# a follow-up (extract-and-rewrite per actual endpoint, then unquarantine).
 import pytest
 import asyncio
 from typing import AsyncGenerator, Generator
@@ -80,7 +90,7 @@ def create_test_app():
     )
     
     # Import and include routers
-    from src.routes import auth, users, quotes, ai, payments, chat, documents, quota, materials
+    from src.routes import auth, users, quotes, ai, payments, chat, documents, quota, materials, onboarding
 
     app.include_router(auth.router, tags=["authentication"])
     app.include_router(users.router, tags=["users"])
@@ -91,7 +101,8 @@ def create_test_app():
     app.include_router(documents.router, tags=["documents"])
     app.include_router(quota.router, tags=["quota"])
     app.include_router(materials.router, tags=["materials"])
-    
+    app.include_router(onboarding.router, tags=["onboarding"])
+
     return app
 
 @pytest.fixture
@@ -180,7 +191,7 @@ async def admin_auth_headers(client: AsyncClient, admin_user: User) -> dict:
 
 @pytest.fixture
 async def test_quote(test_session, test_user) -> Quote:
-    """Create a test quote"""
+    """Create a test quote aligned with the current Quote model."""
     quote = Quote(
         quote_number="TEST-001",
         customer_name="Test Customer",
@@ -188,22 +199,13 @@ async def test_quote(test_session, test_user) -> Quote:
         customer_phone="+1234567890",
         customer_address="123 Test St",
         user_id=test_user.id,
-        rooms=[
-            {
-                "name": "Living Room",
-                "area": 25.5,
-                "wall_area": 45.0,
-                "ceiling_area": 25.5,
-                "floor_area": 25.5,
-                "paint_type": "Premium",
-                "coating_type": "Latex",
-                "labor_hours": 8
-            }
-        ],
+        project_title="Wohnzimmer streichen",
+        project_description="Wände und Decke, weiß, Latex",
         total_amount=1250.00,
-        labor_cost=400.00,
+        labor_hours=8.0,
+        hourly_rate=50.0,
         material_cost=850.00,
-        status="draft"
+        status="draft",
     )
     test_session.add(quote)
     await test_session.commit()

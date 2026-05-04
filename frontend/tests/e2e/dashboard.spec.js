@@ -8,7 +8,7 @@ import {
 } from './helpers/apiMocks.js';
 
 test.describe('dashboard navigation', () => {
-  test('empty dashboard CTAs route to the available quote flows', async ({ page }) => {
+  test('empty dashboard shows a single CTA that opens the quote chat', async ({ page }) => {
     await mockAuthenticatedUser(page, {
       id: 2,
       username: 'mvp-user',
@@ -22,18 +22,25 @@ test.describe('dashboard navigation', () => {
     await expect(page.getByText('Noch keine Angebote erstellt.')).toBeVisible();
 
     await page.getByRole('button', { name: 'Erstes Angebot erstellen' }).click();
-    await expect(page).toHaveURL(/\/new-quote$/);
-
-    await page.goto('/dashboard');
-    await page.getByRole('button', { name: 'Klassischer Editor' }).click();
-    await expect(page).toHaveURL(/\/new-quote$/);
-
-    await page.goto('/dashboard');
-    await page.getByRole('button', { name: 'KI-Assistent' }).click();
-    await expect(page).toHaveURL(/\/chat-quote$/);
+    await expect(page).toHaveURL(/\/quote\/new$/);
   });
 
-  test('quote rows open old quote details', async ({ page }) => {
+  test('main "Neues Angebot starten" button opens the quote chat', async ({ page }) => {
+    await mockAuthenticatedUser(page, {
+      id: 2,
+      username: 'mvp-user',
+      email: 'mvp@example.com',
+      company_name: 'MVP Malerbetrieb',
+      is_premium: true,
+    });
+    await mockEmptyDashboard(page);
+
+    await page.goto('/dashboard');
+    await page.getByRole('button', { name: 'Neues Angebot starten' }).click();
+    await expect(page).toHaveURL(/\/quote\/new$/);
+  });
+
+  test('quote rows open quote details', async ({ page }) => {
     await mockAuthenticatedUser(page, {
       id: 2,
       username: 'mvp-user',

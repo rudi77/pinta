@@ -16,7 +16,7 @@ const Register = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/quick-quote');
+      navigate('/onboarding');
     }
   }, [isAuthenticated, navigate]);
 

@@ -6,16 +6,16 @@ import { Card } from './ui/card';
 import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
-  const { login, demoLogin, error, isAuthenticated } = useAuth();
+  const { login, demoLogin, error, isAuthenticated, onboardingComplete } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/chat-quote');
+      navigate(onboardingComplete ? '/dashboard' : '/onboarding');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, onboardingComplete, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

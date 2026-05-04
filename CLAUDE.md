@@ -54,7 +54,8 @@ uses **FastAPI** — that's the authoritative framework.
 - **main.py** — app factory, lifespan starts AgentFactory, security tasks,
   quota scheduler, Redis cache.
 - **routes/** — auth, users, quotes, ai, payments, chat, documents, quota,
-  materials, **agent** (unified endpoint).
+  materials, **agent** (unified endpoint), **onboarding** (mandatory
+  3-step wizard for new users).
 - **services/** — `agent_service.py` (façade around pytaskforce LeanAgent +
   DB-backed conversation memory), `channel_link_service.py` (telegram chat
   ↔ user mapping with shadow-user creation + linking-token flow),
@@ -95,8 +96,10 @@ arithmetic), `multimedia` (image vision + PDF text extraction).
 
 ### Database Models (`backend/src/models/models.py`)
 - **User** — auth, premium, quota counters, `hourly_rate`,
-  `material_cost_markup`. `is_active=True, is_verified=False` for
-  bot-created shadow users.
+  `material_cost_markup`, `vat_id`, `logo_path`,
+  `onboarding_completed_at` (added in migration 007 — the dashboard is
+  gated until `onboarding_completed_at IS NOT NULL`).
+  `is_active=True, is_verified=False` for bot-created shadow users.
 - **Quote / QuoteItem** — single source of truth for quotes from any
   channel.
 - **Document** — file uploads + agent-generated PDFs.
@@ -215,33 +218,55 @@ and `alembic upgrade head` re-runs migrations from 001 → 500-error. Fix:
 - 005 — material_prices (RAG)
 - 006 — unified agent schema (Conversation, ConversationMessage,
   ChannelLink)
+- 007 — user onboarding fields (`vat_id`, `logo_path`,
+  `onboarding_completed_at`)
 
 ## Testing
 
 ```powershell
-# All tests
+# Deterministic MVP gate (matches CI; 46+ green tests)
+$env:PYTHONPATH = "C:\Users\rudi\source\pinta\backend"
+cd backend
+.\.venv\Scripts\python.exe -m pytest `
+  tests/test_quote_pdf_routes.py `
+  tests/test_onboarding.py `
+  tests/test_agent_service.py `
+  tests/test_quote_search.py `
+  tests/test_ai_prompts_smoke.py `
+  tests/test_quote_calculator.py
+
+# Full suite (includes pre-MVP class-based suites — many of those
+# still red, see conftest.py header for context)
 python scripts/run_tests.py all
-
-# Specific suites
-python scripts/run_tests.py auth | quotes | ai | documents | users
-
-# With coverage / parallel
-python scripts/run_tests.py coverage
-python scripts/run_tests.py all --parallel
-
-# Or via make
-make test
 ```
 
-Tests use in-memory SQLite, mock `AIService` calls, and create an
-isolated FastAPI app to avoid main-app side effects. `conftest.py`
-provides fixtures `test_user`, `auth_headers`, `test_quote`.
+Tests use in-memory SQLite and create an isolated FastAPI app via
+`conftest.py::create_test_app()` so the main app's lifespan doesn't
+fire. Fixtures: `test_user`, `auth_headers`, `test_quote`,
+`test_session`, `client`.
 
-The agent path itself isn't yet covered by integration tests (would
-require an OpenAI mock at the LiteLLM layer); regression tests for the
-prompt builder and quote calculator live in
-`backend/tests/test_ai_prompts_smoke.py` and
-`backend/tests/test_quote_calculator.py`.
+**Test pyramid as of 0.1:**
+- Unit (no LLM, no DB-app): `test_agent_service.py` covers
+  `build_mission_with_history` (incl. `prior_quotes` splice),
+  `extract_pdf_path_from_event`, `extract_quote_ref_from_event`,
+  `recent_quotes` against the test session.
+- Integration (FastAPI TestClient + in-memory SQLite):
+  `test_onboarding.py`, `test_quote_pdf_routes.py`,
+  `test_quote_search.py`, `test_ai_prompts_smoke.py`. **No live LLM
+  calls** — the agent path isn't yet exercised end-to-end here; the
+  pattern (recommended in the plan) is to monkey-patch
+  `agent_service.chat` at the AgentService layer rather than mocking
+  LiteLLM internals.
+- E2E (Playwright, Chromium, mock-only): `frontend/tests/e2e/*.spec.js`
+  with route-mocking helpers in `helpers/apiMocks.js`. CI runs them
+  against `npm run dev` (vite picks up our env at port 5173).
+
+The legacy class-based suites (`TestUsersIntegration`,
+`TestQuotesIntegration`, `TestAuthIntegration`,
+`TestAIIntegration`, `TestDocumentsIntegration`) reference endpoints
+that were never implemented (e.g. `/users/statistics`,
+`/users/settings`, OAuth2-form login). They are quarantined out of
+the CI gate; cleanup is per-endpoint and tracked separately.
 
 ## API Surface (key endpoints)
 
@@ -252,7 +277,8 @@ prompt builder and quote calculator live in
 - `GET  /api/v1/agent/conversations` — user's conversations list.
 - `GET  /api/v1/agent/conversations/{id}/messages` — full transcript.
 - `POST /api/v1/agent/reset` — archive active, start fresh.
-- `GET  /api/v1/agent/pdf/{name}` — auth-gated PDF download.
+- `GET  /api/v1/agent/pdf/{name}` — auth-gated PDF download
+  (path-traversal protected).
 - `POST /api/v1/agent/linking-token` — Web user issues a token to paste
   into Telegram.
 - `POST /api/v1/agent/bot/chat` — bot-service-token auth, headers
@@ -262,13 +288,34 @@ prompt builder and quote calculator live in
 - `POST /api/v1/agent/bot/link` — consume a linking token issued via
   `/agent/linking-token` (rebinds shadow link to the real user).
 
-### Legacy (kept for backwards compatibility)
-- `POST /api/v1/ai/quick-quote` — STILL EXISTS but now delegates
-  internally to the unified agent (stage 4). Same request/response
-  schema as before so the React frontend keeps working unchanged.
+### Onboarding
+- `GET  /api/v1/onboarding/status` — `{completed, missing[], user}`.
+- `POST /api/v1/onboarding/complete` — body
+  `{company_name, address, vat_id?, hourly_rate, material_cost_markup}`,
+  idempotent.
+- `POST /api/v1/onboarding/logo` — multipart, ≤ 1 MB, mime ∈
+  `{png, jpeg, webp, svg+xml}`; logo path stored relative to the
+  uploads root.
+
+### Quotes (MVP entry points)
+- `GET  /api/v1/quotes/?q=…` — substring search across customer name,
+  project title, quote number (case-insensitive). Powers the
+  dashboard search field.
+- `GET  /api/v1/quotes/{id}/agent-pdf-info` — bridge from a Quote
+  record to its agent-generated PDF in `.taskforce_maler/quotes/`.
+  Returns `{pdf_filename, pdf_url}` so the frontend can call
+  `GET /api/v1/agent/pdf/{name}`.
+
+### Legacy (kept for backwards compatibility, deprecated in 0.1)
+- `POST /api/v1/ai/quick-quote` — STILL EXISTS but delegates
+  internally to the unified agent. Same request/response schema as
+  before so the React frontend keeps working unchanged.
 - `POST /api/v1/ai/analyze-project` and `POST /api/v1/ai/generate-quote`
-  — still on the legacy single-shot `AIService` path. Will be migrated
-  when the frontend switches to the unified `/agent/chat`.
+  — still on the legacy single-shot `AIService` path.
+- `POST /api/v1/quotes/{id}/pdf/generate` and
+  `GET /api/v1/quotes/{id}/pdf/download` — marked `deprecated=True`,
+  agent-generated quotes won't be found there. Use the
+  `agent-pdf-info` route instead. Slated for removal in 0.2.
 
 ### Other (unchanged)
 - `/api/v1/auth/*`, `/api/v1/users/*`, `/api/v1/quotes/*`,
@@ -294,6 +341,10 @@ prompt builder and quote calculator live in
   lives in the Pinta DB, NOT in pytaskforce's StateManager — we splice
   it into the mission as a "Bisheriger Chat-Verlauf" prefix because
   `LeanAgent.execute_stream` doesn't accept a prior-messages parameter.
+- **Quote-memory splice** (since 0.1) — `agent_service.recent_quotes()`
+  loads the user's last 5 quotes and `build_mission_with_history`
+  injects them as a "Letzte Angebote dieses Nutzers" block ahead of
+  the chat history. Cap is `_QUOTE_MEMORY_LIMIT` in `agent_service.py`.
 
 ## Common Gotchas
 
@@ -316,6 +367,16 @@ prompt builder and quote calculator live in
   `email=tg-<chat_id>-<random>@telegram.shadow`. They have a random
   password they can never use. They DON'T count against quota the same
   way regular users do — be aware when monitoring.
+- **Onboarding gate is bypassed for the demo user** —
+  `useAuth.onboardingComplete` is forced `true` when
+  `demoMode === true` (detected by `userData.email === 'demo@example.com'`).
+  Real users land on `/onboarding` until `onboarding_completed_at` is
+  set; the gate lives in `frontend/src/components/PrivateRoute.jsx`.
+- **Frontend dev port collisions** — Vite is `strictPort: 5173`. If
+  another dev server (e.g. a sibling Taskforce admin UI) is bound to
+  `localhost:5173` while Pinta serves on `127.0.0.1:5173`, the browser
+  may resolve `localhost` to the wrong app. Use `127.0.0.1` explicitly
+  in dev URLs.
 
 ## Memory & Auto-Loaded Context
 

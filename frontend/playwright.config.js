@@ -15,7 +15,9 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'pnpm dev -- --host 127.0.0.1',
+    // Use npm so CI works without an extra pnpm install step. Local devs
+    // can still run `pnpm dev` themselves; reuseExistingServer picks it up.
+    command: 'npm run dev -- --host 127.0.0.1',
     url: 'http://127.0.0.1:5173',
     reuseExistingServer: !isCI,
     timeout: 120_000,

@@ -14,7 +14,7 @@ from src.core.security_tasks import start_security_tasks, stop_security_tasks, g
 from src.core.quota_scheduler import start_quota_scheduler, stop_quota_scheduler
 from src.core.settings import settings
 from src.routes import (
-    auth, users, quotes, ai, payments, chat, documents, quota, materials, agent,
+    auth, users, quotes, ai, payments, chat, documents, quota, materials, agent, onboarding,
 )
 
 # Configure logging
@@ -153,6 +153,7 @@ app.include_router(documents.router, tags=["documents"])
 app.include_router(quota.router, tags=["quota"])
 app.include_router(materials.router, tags=["materials"])
 app.include_router(agent.router)
+app.include_router(onboarding.router)
 
 # Mount selected pytaskforce routers via the public host API so future
 # channel adapters (Teams, Slack, additional Telegram bots) can reach the

@@ -80,25 +80,18 @@ const QuickQuote = () => {
 
   const handleDownloadPdf = async () => {
     if (!result) return;
+    let url = null;
     try {
-      const response = await apiClient.downloadQuotePdf(result.quote_id);
-      const data = await response.json();
-      if (data.pdf_info?.pdf_base64) {
-        const byteChars = atob(data.pdf_info.pdf_base64);
-        const byteArray = new Uint8Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteArray[i] = byteChars.charCodeAt(i);
-        }
-        const blob = new Blob([byteArray], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${result.quote_number}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
+      const { blob } = await apiClient.fetchAgentPdfByQuoteId(result.quote_id);
+      url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${result.quote_number}.pdf`;
+      a.click();
     } catch (err) {
       setError(err.message || 'PDF konnte nicht erzeugt werden');
+    } finally {
+      if (url) URL.revokeObjectURL(url);
     }
   };
 

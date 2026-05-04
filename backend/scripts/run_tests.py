@@ -25,15 +25,14 @@ def run_command(cmd, description):
         return True
 
 def main():
-    # Set PYTHONPATH to include src directory
+    # Set PYTHONPATH to include backend dir (so `from src.core...` works).
     backend_dir = Path(__file__).parent.parent
-    src_dir = backend_dir / "src"
-    
+
     current_pythonpath = os.environ.get("PYTHONPATH", "")
     if current_pythonpath:
-        os.environ["PYTHONPATH"] = f"{src_dir}{os.pathsep}{current_pythonpath}"
+        os.environ["PYTHONPATH"] = f"{backend_dir}{os.pathsep}{current_pythonpath}"
     else:
-        os.environ["PYTHONPATH"] = str(src_dir)
+        os.environ["PYTHONPATH"] = str(backend_dir)
     
     parser = argparse.ArgumentParser(description="Run backend tests")
     parser.add_argument(
