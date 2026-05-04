@@ -143,8 +143,33 @@ class Settings(BaseSettings):
             raise ValueError('SECRET_KEY must be at least 32 characters long')
         return v
     
+    @computed_field
+    @property
+    def llm_provider(self) -> str:
+        """Auto-detect which LLM provider is configured.
+
+        Returns:
+            ``"azure"``  — Azure OpenAI creds are set (key + endpoint).
+            ``"openai"`` — only the plain OpenAI key is set.
+            ``"none"``   — nothing usable; agent path will fail fast.
+
+        Override by setting ``LLM_PROVIDER`` in .env (azure|openai).
+        """
+        forced = (os.environ.get("LLM_PROVIDER") or "").strip().lower()
+        if forced in {"azure", "openai"}:
+            return forced
+        if (self.azure_openai_api_key or "").strip() and (self.azure_openai_endpoint or "").strip():
+            return "azure"
+        if (self.openai_api_key or "").strip():
+            return "openai"
+        return "none"
+
     class Config:
-        env_file = ".env"
+        # Search up the tree: backend/.env first (closest, ops-specific
+        # overrides), then the repo-root .env (the documented canonical
+        # spot per CLAUDE.md). Later files in the tuple win for
+        # pydantic-settings, so root .env keys override backend/.env.
+        env_file = (".env", "../.env")
         env_file_encoding = "utf-8"
         case_sensitive = False
         env_ignore_empty = True

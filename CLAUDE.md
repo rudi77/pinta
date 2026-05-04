@@ -148,12 +148,22 @@ npm install
 # Auth
 SECRET_KEY=<32+ chars>
 
-# OpenAI / Azure (backend AND bot read this)
+# LLM provider — pick at least one. Pinta auto-detects which to use:
+# Azure has priority if both are set. Override with LLM_PROVIDER=azure|openai.
+
+# Plain OpenAI:
 OPENAI_API_KEY=sk-...
+
+# Azure OpenAI:
 AZURE_OPENAI_API_KEY=...
 AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com
 AZURE_OPENAI_API_VERSION=2024-10-21
-AGENT_LLM_MODEL_ALIAS=main          # main | fast | claude-sonnet | ...
+
+# Optional: pin a specific model alias (overrides provider default).
+# Aliases are defined in backend/agents/llm_config.yaml:
+#   main / fast / powerful / legacy        → azure/gpt-5.4-* / azure/gpt-4.1
+#   openai-main / openai-fast / openai-powerful → openai/gpt-4o-mini / gpt-4o
+AGENT_LLM_MODEL_ALIAS=main
 
 # Telegram
 TELEGRAM_BOT_TOKEN=<BotFather token>
@@ -166,8 +176,17 @@ STRIPE_PRICE_ID=...
 STRIPE_WEBHOOK_SECRET=...
 ```
 
-`AZURE_OPENAI_*` is auto-bridged to LiteLLM's `AZURE_API_*` convention by
-`backend/src/agents/taskforce_setup.py::ensure_litellm_env_for_taskforce`.
+`AZURE_OPENAI_*` is auto-bridged to LiteLLM's `AZURE_API_*` convention
+by `backend/src/agents/taskforce_setup.py::ensure_litellm_env_for_taskforce`.
+The same function detects whether to validate Azure or plain-OpenAI
+credentials based on `settings.llm_provider` (auto-derived from .env).
+At startup, `factory.warm_factory()` renders a provider-aware copy of
+`maler.yaml` into `.taskforce_maler/profiles/maler.yaml` with an
+`llm:` block pointing at `backend/agents/llm_config.yaml` and the
+right `default_model` (`main` for Azure, `openai-main` for plain
+OpenAI). The `.env` is read from BOTH `backend/.env` and the repo-root
+`.env`; root values override backend, so the canonical place to put
+secrets is the root file (per CLAUDE.md convention).
 
 ## Running
 
