@@ -37,7 +37,7 @@ from src.agents.tools.save_quote_to_db import (
 from src.core.database import get_db
 from src.core.security import get_current_user
 from src.core.settings import settings
-from src.models.models import Conversation, ConversationMessage, User
+from src.models.models import ChannelLink, Conversation, ConversationMessage, User
 from src.services.agent_service import agent_service
 from src.services.channel_link_service import (
     consume_linking_token,
@@ -489,17 +489,61 @@ async def issue_linking_token_endpoint(
     user: User = Depends(get_current_user),
     channel: str = "telegram",
 ) -> dict[str, Any]:
-    """Web-side: issue a 24h token the user pastes into Telegram via /link <token>."""
+    """Web-side: issue a token the user pastes into Telegram.
+
+    TTL is configurable via ``settings.linking_token_ttl_hours`` (default
+    30 days). Response also carries the bot username so the frontend can
+    build a deep-link the user only has to click once.
+    """
     token, expires = await issue_linking_token(db, user, channel=channel)
+    bot_username = (settings.telegram_bot_username or "").strip().lstrip("@")
+    deep_link = (
+        f"https://t.me/{bot_username}?start={token}" if bot_username else None
+    )
     return {
         "token": token,
         "expires_at": expires.isoformat(),
         "channel": channel,
-        "instruction": (
-            f"Schick im Telegram-Chat: /link {token}\n"
-            "Dann ist dein Bot-Chat mit deinem Pinta-Account verknüpft "
-            "und Quotes landen im Web-Dashboard."
-        ),
+        "bot_username": bot_username or None,
+        "deep_link": deep_link,
+        "command": f"/link {token}",
+    }
+
+
+@router.get("/channel-links")
+async def list_channel_links(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return the user's confirmed channel links + bot config for the UI.
+
+    Filters out token placeholders (``external_id`` starts with
+    ``pending-``) so callers only see actually-paired chats.
+    """
+    rows = (await db.execute(
+        select(ChannelLink)
+        .where(ChannelLink.user_id == user.id)
+        .order_by(ChannelLink.id.desc())
+    )).scalars().all()
+
+    links: list[dict[str, Any]] = []
+    for row in rows:
+        if (row.external_id or "").startswith("pending-"):
+            continue
+        links.append({
+            "id": row.id,
+            "channel": row.channel,
+            "external_id": row.external_id,
+            "display_name": row.display_name,
+            "is_anonymous_shadow": bool(row.is_anonymous_shadow),
+            "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
+        })
+
+    bot_username = (settings.telegram_bot_username or "").strip().lstrip("@")
+    return {
+        "links": links,
+        "bot_username": bot_username or None,
+        "linking_token_ttl_hours": int(settings.linking_token_ttl_hours or 0),
     }
 
 

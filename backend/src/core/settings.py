@@ -48,6 +48,14 @@ class Settings(BaseSettings):
 
     # Telegram bot (Maler-Agent Messenger Interface)
     telegram_bot_token: str = ""
+    # Bot @username (without the leading @) for building deep-links like
+    # https://t.me/<bot>?start=<linking_token>. Auto-detected at startup if
+    # left empty (see backend.src.telegram.runner.fetch_bot_username).
+    telegram_bot_username: str = ""
+    # How long a Web-issued linking token stays valid. 30 days = ein Maler
+    # kann seinen Account in Ruhe verbinden, auch wenn er erst beim 2.
+    # Termin in der nächsten Woche an Telegram denkt.
+    linking_token_ttl_hours: int = 24 * 30
     # Long-lived shared secret the Telegram bot uses to authenticate its
     # /api/v1/agent/bot/* calls against the Pinta backend. Generate once,
     # set the same value in both backend .env (BOT_SERVICE_TOKEN=...) and

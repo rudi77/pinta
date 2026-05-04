@@ -101,15 +101,21 @@ async def resolve_or_create_shadow_user(
 
 # ── Linking-Token flow (web → bot) ────────────────────────────────────────
 
-LINKING_TOKEN_TTL_HOURS = 24
-
 
 async def issue_linking_token(
     db: AsyncSession, user: User, *, channel: str = "telegram",
 ) -> tuple[str, datetime]:
-    """Generate a short-lived token a Web user can paste into the bot."""
+    """Generate a token a Web user can paste into the bot.
+
+    TTL comes from ``settings.linking_token_ttl_hours`` (default 30 days);
+    long enough that a contractor can connect their account in their own
+    time without coming back the same day.
+    """
+    from src.core.settings import settings
+
+    ttl_hours = max(1, int(settings.linking_token_ttl_hours or 24 * 30))
     token = secrets.token_urlsafe(24)
-    expires = datetime.utcnow() + timedelta(hours=LINKING_TOKEN_TTL_HOURS)
+    expires = datetime.utcnow() + timedelta(hours=ttl_hours)
 
     # Park the token on a placeholder ChannelLink with external_id=""+token
     # so we can find it later without a separate table. Cleared when consumed.

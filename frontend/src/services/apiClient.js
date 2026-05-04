@@ -237,6 +237,18 @@ class ApiClient {
     return { blob, filename: info.pdf_filename };
   }
 
+  // Telegram-Linking
+  async getChannelLinks() {
+    return await this.request('/agent/channel-links');
+  }
+
+  async createTelegramLinkingToken() {
+    return await this.request('/agent/linking-token', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
   // Onboarding
   async getOnboardingStatus() {
     return await this.request('/onboarding/status');

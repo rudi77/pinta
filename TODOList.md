@@ -88,7 +88,7 @@ Stand jetzt: ohne diese Punkte fühlt sich Pinta für echte Tester unvollständi
 ### Telegram & Bot-Pfad
 - [x] **Telegram-Bot-Launcher** (`scripts/start_dev.ps1` + `scripts/stop_dev.ps1`).
 - [ ] **End-to-End Telegram-Smoke**: echter Bot-Chat mit Foto + PDF-Rückversand mit dem Owner-Account. *Aufwand: 30 min*
-- [ ] **Web ↔ Telegram Linking-Token UI**: Endpoint existiert (`/api/v1/agent/linking-token`), aber kein Button im Web-Dashboard zum Generieren des Tokens. *Aufwand: 1 h*
+- [x] **Web ↔ Telegram Linking-Token UI** — Dashboard-Card "Telegram-Bot" mit Token-Erzeugung, Deep-Link `https://t.me/<bot>?start=<token>`, manuellem `/link <token>`-Befehl + Copy-Button. Status-Endpoint `GET /agent/channel-links` zeigt verbundene Chats. TTL von 24 h auf 30 Tage hochgezogen, konfigurierbar via `LINKING_TOKEN_TTL_HOURS`. Bot-Username via `TELEGRAM_BOT_USERNAME` in .env.
 
 ### Owner-UX
 - [ ] **Settings-Seite `/settings`**: Stundensatz, Materialaufschlag, Firmendaten, Logo nachträglich editieren. Onboarding-Felder müssen änderbar sein. *Aufwand: 3–4 h*
