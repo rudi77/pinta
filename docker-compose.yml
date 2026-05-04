@@ -51,7 +51,7 @@ services:
       - REFRESH_TOKEN_EXPIRE_DAYS=7
       - BCRYPT_ROUNDS=12
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+      - ALLOWED_ORIGINS=http://localhost:5183,http://localhost:3000
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
       - STRIPE_PRICE_ID=${STRIPE_PRICE_ID}
@@ -83,7 +83,7 @@ services:
       - VITE_API_URL=http://localhost:8000
       - VITE_STRIPE_PUBLISHABLE_KEY=${STRIPE_PUBLISHABLE_KEY}
     ports:
-      - "5173:5173"
+      - "5183:5183"
     volumes:
       - ./frontend:/app
       - /app/node_modules

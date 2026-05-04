@@ -92,7 +92,7 @@ class Settings(BaseSettings):
     smtp_use_tls: bool = True  # STARTTLS on non-465 ports
 
     # Application base URL (used for verification links, etc.)
-    app_base_url: str = "http://localhost:5173"
+    app_base_url: str = "http://localhost:5183"
     
     # File Upload
     max_file_size: int = 10485760  # 10MB

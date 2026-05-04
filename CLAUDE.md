@@ -259,7 +259,7 @@ fire. Fixtures: `test_user`, `auth_headers`, `test_quote`,
   LiteLLM internals.
 - E2E (Playwright, Chromium, mock-only): `frontend/tests/e2e/*.spec.js`
   with route-mocking helpers in `helpers/apiMocks.js`. CI runs them
-  against `npm run dev` (vite picks up our env at port 5173).
+  against `npm run dev` (vite picks up our env at port 5183).
 
 The legacy class-based suites (`TestUsersIntegration`,
 `TestQuotesIntegration`, `TestAuthIntegration`,
@@ -372,11 +372,10 @@ the CI gate; cleanup is per-endpoint and tracked separately.
   `demoMode === true` (detected by `userData.email === 'demo@example.com'`).
   Real users land on `/onboarding` until `onboarding_completed_at` is
   set; the gate lives in `frontend/src/components/PrivateRoute.jsx`.
-- **Frontend dev port collisions** — Vite is `strictPort: 5173`. If
-  another dev server (e.g. a sibling Taskforce admin UI) is bound to
-  `localhost:5173` while Pinta serves on `127.0.0.1:5173`, the browser
-  may resolve `localhost` to the wrong app. Use `127.0.0.1` explicitly
-  in dev URLs.
+- **Frontend dev port** — Vite is `strictPort: 5183`. The unusual port
+  avoids a collision with the sibling pytaskforce admin UI on
+  `localhost:5173`. If another tool tries to grab 5183, vite fails
+  fast rather than silently moving to a different port.
 
 ## Memory & Auto-Loaded Context
 
