@@ -16,7 +16,7 @@ _AGENT_QUOTES_DIR = (
 
 from src.core.database import get_db
 from src.routes.auth import get_current_user
-from src.models.models import User, Quote, QuoteItem
+from src.models.models import User, Quote, QuoteItem, Document
 from src.schemas.schemas import (
     QuoteCreate, QuoteUpdate, QuoteResponse, QuoteItemCreate, 
     SuccessResponse, ErrorResponse, GenerateQuoteAIRequest,
@@ -286,16 +286,17 @@ async def update_quote(
             .values(**update_data)
         )
         await db.commit()
-        await db.refresh(quote)
-    
-    # Load quote items
-    items_result = await db.execute(
-        select(QuoteItem)
-        .where(QuoteItem.quote_id == quote.id)
-        .order_by(QuoteItem.position)
+
+    # Re-fetch with items eagerly loaded — assigning back to
+    # quote.quote_items would trigger a lazy load in async context
+    # and crash with a greenlet error.
+    refreshed = await db.execute(
+        select(Quote)
+        .where(Quote.id == quote_id)
+        .options(selectinload(Quote.quote_items))
     )
-    quote.quote_items = items_result.scalars().all()
-    
+    quote = refreshed.scalar_one()
+
     return quote_to_response(quote)
 
 @router.delete("/{quote_id}", response_model=SuccessResponse)
@@ -634,8 +635,14 @@ async def get_agent_pdf_info(
 ):
     """Resolve a Quote → its agent-generated PDF in `.taskforce_maler/quotes/`.
 
-    Returns `{pdf_url, pdf_filename}` so the frontend can hand the URL to
-    `GET /api/v1/agent/pdf/{name}` (auth-gated, path-traversal-protected).
+    Returns ``{pdf_url, pdf_filename}`` so the frontend can hand the URL
+    to ``GET /api/v1/agent/pdf/{name}`` (auth-gated, path-traversal
+    protected). Resolution order:
+
+    1. ``Document`` rows linked to the quote (the source of truth — every
+       agent-generated PDF inserts a Document with quote_id set).
+    2. Fallback: glob for ``*{quote_number}*.pdf`` in the agent dir
+       (covers older PDFs predating the Document linkage).
     """
     result = await db.execute(
         select(Quote)
@@ -649,28 +656,43 @@ async def get_agent_pdf_info(
             detail="Kostenvoranschlag nicht gefunden",
         )
 
-    if not _AGENT_QUOTES_DIR.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="PDF nicht gefunden. Bitte über den Chat erneut anstoßen.",
-        )
-
-    matches = sorted(
-        (p for p in _AGENT_QUOTES_DIR.glob(f"*{quote.quote_number}*.pdf") if p.is_file()),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
+    # 1) Document table — preferred path
+    docs = await db.execute(
+        select(Document)
+        .where(Document.quote_id == quote_id)
+        .where(Document.user_id == current_user.id)
+        .where(Document.mime_type == "application/pdf")
+        .order_by(Document.id.desc())
     )
-    if not matches:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="PDF nicht gefunden. Bitte über den Chat erneut anstoßen.",
-        )
+    for doc in docs.scalars():
+        if not doc.file_path:
+            continue
+        candidate = Path(doc.file_path)
+        if candidate.is_file():
+            filename = candidate.name
+            return {
+                "pdf_filename": filename,
+                "pdf_url": f"/api/v1/agent/pdf/{filename}",
+            }
 
-    filename = matches[0].name
-    return {
-        "pdf_filename": filename,
-        "pdf_url": f"/api/v1/agent/pdf/{filename}",
-    }
+    # 2) Filesystem fallback
+    if _AGENT_QUOTES_DIR.exists():
+        matches = sorted(
+            (p for p in _AGENT_QUOTES_DIR.glob(f"*{quote.quote_number}*.pdf") if p.is_file()),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        if matches:
+            filename = matches[0].name
+            return {
+                "pdf_filename": filename,
+                "pdf_url": f"/api/v1/agent/pdf/{filename}",
+            }
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="PDF nicht gefunden. Bitte über den Chat erneut anstoßen.",
+    )
 
 
 @router.post("/{quote_id}/export", response_model=ExportResponse)

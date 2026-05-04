@@ -123,13 +123,29 @@ app.add_middleware(
 )
 
 
+def _cors_headers_for(request: Request) -> dict:
+    """CORS headers for error responses (Starlette's CORSMiddleware doesn't
+    wrap responses produced by FastAPI exception handlers, so the browser
+    sees errors as CORS-blocked instead of as the actual 4xx/5xx)."""
+    origin = request.headers.get("origin")
+    if not origin or origin not in settings.cors_origins:
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Vary": "Origin",
+        "Access-Control-Allow-Credentials": "true",
+    }
+
+
 # Global exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    headers = dict(getattr(exc, "headers", None) or {})
+    headers.update(_cors_headers_for(request))
     return JSONResponse(
         status_code=exc.status_code,
         content={"success": False, "detail": exc.detail},
-        headers=getattr(exc, "headers", None),
+        headers=headers,
     )
 
 
@@ -139,6 +155,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"success": False, "detail": "Ein interner Serverfehler ist aufgetreten."},
+        headers=_cors_headers_for(request),
     )
 
 
