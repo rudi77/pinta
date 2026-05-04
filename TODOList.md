@@ -75,7 +75,7 @@ Legende: ✅ done · 🟡 angefangen / unvollständig · ⬜ offen · ❌ verwor
 
 ## 🟡 In Arbeit / Bereits angelegt aber unvollständig
 
-- [ ] **Telegram-Bot zuverlässig starten**: Code ist fertig (`backend/src/telegram/runner.py`, `scripts/run_telegram_bot.py`), Tokens sind in `.env`. Aber niemand startet den Prozess. **TODO**: Launcher-Skript ODER `start.ps1`/Make-Target ODER docker-compose-Profil. Auch: `BOT_BACKEND_URL` Default ist 8000, aktuell läuft Backend auf 8001 (Phantom-Process), muss eines von beiden geheilt werden.
+- [x] **Telegram-Bot zuverlässig starten** — Launcher `scripts/start_dev.ps1` öffnet Backend + Bot + Frontend in drei pwsh-Fenstern, setzt `BOT_BACKEND_URL` automatisch passend zum gewählten Port. `scripts/stop_dev.ps1` killt sauber. Verifiziert: Bot `@BluLieferantenBot` ist online und spricht mit Backend auf 8001.
 - [ ] **Material-Preise (RAG)**: Tabelle + Service + Tool fertig, **kein Seed**, kein UI zum Pflegen. Agent fällt auf Faustregeln zurück.
 - [ ] **Logo-Upload UI fertig, PDF-Rendering ignoriert es** (`generate_quote_pdf.py` zieht `User.logo_path` nicht).
 
@@ -86,8 +86,8 @@ Legende: ✅ done · 🟡 angefangen / unvollständig · ⬜ offen · ❌ verwor
 Stand jetzt: ohne diese Punkte fühlt sich Pinta für echte Tester unvollständig an.
 
 ### Telegram & Bot-Pfad
-- [ ] **Telegram-Bot-Launcher**: ein Skript / Compose-Profil das Bot + Backend zusammen hochfährt. Inkl. Default-Port-Korrektur (`BOT_BACKEND_URL`). *Aufwand: 1 h*
-- [ ] **End-to-End Telegram-Smoke**: echter Bot-Chat mit Foto + PDF-Rückversand. *Aufwand: 30 min*
+- [x] **Telegram-Bot-Launcher** (`scripts/start_dev.ps1` + `scripts/stop_dev.ps1`).
+- [ ] **End-to-End Telegram-Smoke**: echter Bot-Chat mit Foto + PDF-Rückversand mit dem Owner-Account. *Aufwand: 30 min*
 - [ ] **Web ↔ Telegram Linking-Token UI**: Endpoint existiert (`/api/v1/agent/linking-token`), aber kein Button im Web-Dashboard zum Generieren des Tokens. *Aufwand: 1 h*
 
 ### Owner-UX

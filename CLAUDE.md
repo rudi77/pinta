@@ -191,20 +191,28 @@ secrets is the root file (per CLAUDE.md convention).
 ## Running
 
 ```powershell
-# Backend (from project root)
+# All three at once (opens three pwsh windows: backend, bot, frontend)
+.\scripts\start_dev.ps1
+.\scripts\start_dev.ps1 -BackendPort 8001    # if 8000 is phantom-occupied
+
+# Stop
+.\scripts\stop_dev.ps1                       # just the launched windows
+.\scripts\stop_dev.ps1 -All                  # + any listener on 8000/8001/5173/5183
+
+# Or run individually:
 cd backend
 .\.venv\Scripts\python.exe -m uvicorn src.main:app --port 8000 --reload
 
-# Telegram bot (from project root)
 backend\.venv\Scripts\python.exe scripts\run_telegram_bot.py
 
-# Frontend dev server
 cd frontend
 npm run dev
 ```
 
-The bot expects the backend to be reachable at `BOT_BACKEND_URL`; both
-processes can run on the same host.
+The bot expects the backend to be reachable at `BOT_BACKEND_URL`. The
+launcher sets this automatically based on `-BackendPort`. When running
+the bot manually, set it via env (`$env:BOT_BACKEND_URL = "http://127.0.0.1:8001"`)
+if you're not on the default 8000.
 
 ## Database Management
 

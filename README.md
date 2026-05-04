@@ -143,27 +143,40 @@ choco install tesseract poppler
 
 ## Starten
 
-### Backend
+### Alles auf einmal (empfohlen)
 ```powershell
-cd backend
-.\.venv\Scripts\python.exe -m uvicorn src.main:app --port 8000 --reload
+.\scripts\start_dev.ps1
 ```
-→ http://localhost:8000  ·  Health: http://localhost:8000/health
+Öffnet drei pwsh-Fenster: Backend (8000), Telegram-Bot, Frontend (5183).
+Der Bot bekommt automatisch `BOT_BACKEND_URL=http://127.0.0.1:<BackendPort>`
+gesetzt, sodass er auch bei einem nicht-Standard-Backend-Port den
+richtigen Endpoint anruft.
 
-### Frontend
+Optionen:
+- `-BackendPort 8001` — Backend auf 8001 (z.B. wenn 8000 phantom-belegt ist)
+- `-SkipBot` / `-SkipFrontend` / `-SkipBackend` — einzelne Prozesse weglassen
+
+Stop:
 ```powershell
+.\scripts\stop_dev.ps1            # nur was start_dev.ps1 gestartet hat
+.\scripts\stop_dev.ps1 -All       # zusätzlich alle Listener auf 8000/8001/5173/5183 killen
+```
+
+### Einzeln
+```powershell
+# Backend (Port 8000)
+cd backend
+.\.venv\Scripts\python.exe -m uvicorn src.main:app --port 8000
+
+# Frontend (Port 5183)
 cd frontend
 npm run dev
-```
-→ http://localhost:5183
 
-### Telegram-Bot
-```powershell
+# Telegram-Bot (long-polling, kein Webhook nötig)
 backend\.venv\Scripts\python.exe scripts\run_telegram_bot.py
 ```
-Long-Polling, kein Webhook nötig. Bricht beim Start ab, falls
-`TELEGRAM_BOT_TOKEN` oder `BOT_SERVICE_TOKEN` fehlen — mit klarer
-Anweisung was zu setzen ist.
+Der Bot bricht beim Start ab, wenn `TELEGRAM_BOT_TOKEN` oder
+`BOT_SERVICE_TOKEN` fehlen — mit klarer Anweisung was zu setzen ist.
 
 ## Projektstruktur
 
