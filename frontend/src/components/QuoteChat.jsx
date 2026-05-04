@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import apiClient from '../services/apiClient';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
-import { Loader2, Send, Upload, FileText, ArrowLeft } from 'lucide-react';
+import { Loader2, Send, Upload, FileText } from 'lucide-react';
 
 const QuoteChat = () => {
   const { isAuthenticated, loading: authLoading } = useAuth();
@@ -170,16 +170,6 @@ const QuoteChat = () => {
 
   return (
     <div className="flex flex-col h-full max-w-4xl mx-auto p-4">
-      <div className="mb-3">
-        <Link
-          to="/dashboard"
-          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Zurück zum Dashboard
-        </Link>
-      </div>
-
       <div className="flex-1 flex flex-col">
         <ScrollArea ref={scrollRef} className="flex-1 p-4">
           <div className="space-y-4">

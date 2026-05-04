@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import apiClient from '../../services/apiClient';
 import CompanySection from './CompanySection';
@@ -46,16 +44,6 @@ const SettingsPage = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
-      <div className="mb-6">
-        <Link
-          to="/dashboard"
-          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Zurück zum Dashboard
-        </Link>
-      </div>
-
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Einstellungen</h1>
       <p className="text-sm text-gray-600 mb-8">
         Diese Werte landen automatisch in jedem neuen Angebot — Stundensatz,
