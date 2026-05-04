@@ -121,3 +121,18 @@ async def upload_logo(
     await db.commit()
     await db.refresh(current_user)
     return current_user
+
+
+@router.delete("/logo", response_model=UserResponse)
+async def delete_logo(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Forget the logo path. The file on disk is left in place — it's
+    user-uploaded content and a separate cleanup job can reap orphans
+    later. No-op if no logo is set."""
+    current_user.logo_path = None
+    db.add(current_user)
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user

@@ -116,6 +116,17 @@ class ApiClient {
     return await this.request('/auth/me');
   }
 
+  async updateUserProfile(payload) {
+    return await this.request('/users/profile', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteUserLogo() {
+    return await this.request('/onboarding/logo', { method: 'DELETE' });
+  }
+
   // Quotes
   async getQuotes(params = {}) {
     const queryString = new URLSearchParams(params).toString();

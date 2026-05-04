@@ -91,7 +91,7 @@ Stand jetzt: ohne diese Punkte fühlt sich Pinta für echte Tester unvollständi
 - [x] **Web ↔ Telegram Linking-Token UI** — Dashboard-Card "Telegram-Bot" mit Token-Erzeugung, Deep-Link `https://t.me/<bot>?start=<token>`, manuellem `/link <token>`-Befehl + Copy-Button. Status-Endpoint `GET /agent/channel-links` zeigt verbundene Chats. TTL von 24 h auf 30 Tage hochgezogen, konfigurierbar via `LINKING_TOKEN_TTL_HOURS`. Bot-Username via `TELEGRAM_BOT_USERNAME` in .env.
 
 ### Owner-UX
-- [ ] **Settings-Seite `/settings`**: Stundensatz, Materialaufschlag, Firmendaten, Logo nachträglich editieren. Onboarding-Felder müssen änderbar sein. *Aufwand: 3–4 h*
+- [x] **Settings-Seite `/settings`** — vier Sektionen: Firmendaten (company_name, address, vat_id, phone), Kalkulation (hourly_rate, material_cost_markup), Logo (upload/replace/delete via neuer `DELETE /api/v1/onboarding/logo`), Telegram-Bot-Link. App-Header (vorher dead code) ist jetzt aktiv und enthält den `Einstellungen`-Link. Telegram-Card aus dem Dashboard rausgezogen — gehört dorthin nicht.
 - [ ] **Quote-Detail: Customer-Felder editierbar**: Name, E-Mail, Telefon, Adresse nachpflegbar. *Aufwand: 2 h*
 
 ### PDF-Output (essentiell für Maler-Außenwirkung)

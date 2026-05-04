@@ -11,6 +11,7 @@ import QuickQuote from './components/QuickQuote';
 import PrivateRoute from './components/PrivateRoute';
 import VerifyEmail from './components/VerifyEmail';
 import OnboardingWizard from './components/Onboarding/OnboardingWizard';
+import SettingsPage from './components/Settings/SettingsPage';
 
 // Header Component
 const Header = () => {
@@ -55,6 +56,12 @@ const Header = () => {
                 >
                   Neues Angebot
                 </button>
+                <button
+                  onClick={() => window.location.href = '/settings'}
+                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Einstellungen
+                </button>
                 <span className="text-sm text-gray-600">
                   Hallo, {user?.username || user?.company_name || 'User'}
                 </span>
@@ -79,6 +86,7 @@ function App() {
     <Router>
       <AuthProvider>
         <div className="min-h-screen bg-gray-50">
+          <Header />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -97,6 +105,7 @@ function App() {
             <Route path="/chat-quote" element={<Navigate to="/quote/new" replace />} />
             <Route path="/new-quote" element={<Navigate to="/quote/new" replace />} />
             <Route path="/quotes/:quoteId" element={<PrivateRoute><QuoteDetail /></PrivateRoute>} />
+            <Route path="/settings" element={<PrivateRoute><SettingsPage /></PrivateRoute>} />
             <Route path="/" element={<Navigate to="/dashboard" />} />
           </Routes>
         </div>

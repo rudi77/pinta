@@ -4,7 +4,6 @@ import apiClient from '../services/apiClient';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { useNavigate } from 'react-router-dom';
-import TelegramLinkCard from './TelegramLinkCard';
 
 const Dashboard = () => {
   const { user, demoMode } = useAuth();
@@ -308,7 +307,7 @@ const Dashboard = () => {
         )}
       </div>
 
-      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="mt-8">
         <Card className="p-6">
           <h3 className="text-lg font-semibold mb-1">Neues Angebot</h3>
           <p className="text-sm text-gray-600 mb-4">
@@ -319,7 +318,6 @@ const Dashboard = () => {
             Neues Angebot starten
           </Button>
         </Card>
-        {!demoMode && <TelegramLinkCard />}
       </div>
     </div>
   );
