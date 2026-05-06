@@ -239,3 +239,11 @@ frontend/test-results/
 
 # Stray Playwright-MCP screenshots saved at the repo root
 /*.png
+
+# forge runtime artefacts — `.forge/project.yaml` IS committed, the rest isn't
+.forge/blobs/
+.forge/worktrees/
+.forge/events.duckdb
+.forge/events.duckdb.wal
+.forge/runs/
+.venv/
