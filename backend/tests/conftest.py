@@ -89,8 +89,11 @@ def create_test_app():
         allow_headers=["*"],
     )
     
-    # Import and include routers
-    from src.routes import auth, users, quotes, ai, payments, chat, documents, quota, materials, onboarding
+    # Import and include routers — must mirror main.py
+    from src.routes import (
+        agent, ai, auth, chat, documents, materials, onboarding,
+        payments, quota, quotes, users,
+    )
 
     app.include_router(auth.router, tags=["authentication"])
     app.include_router(users.router, tags=["users"])
@@ -101,6 +104,7 @@ def create_test_app():
     app.include_router(documents.router, tags=["documents"])
     app.include_router(quota.router, tags=["quota"])
     app.include_router(materials.router, tags=["materials"])
+    app.include_router(agent.router)
     app.include_router(onboarding.router, tags=["onboarding"])
 
     return app
