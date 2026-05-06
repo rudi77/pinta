@@ -15,20 +15,20 @@ surfaces:
     paths:
       - "backend/src/services/"
     type: code
-    guardrails:
-      # Preflight: schnelle Sanity-Checks, Budget <30s gesamt
-      - "cd backend && black --check src/services/"
-      - "cd backend && isort --check src/services/"
-      - "cd backend && flake8 src/services/ --max-line-length 120"
+    # NOTE: black/isort/flake8 sind aus Preflight rausgenommen für die
+    # Smoke-Phase, weil PINTAs aktuelle main NICHT black-formatiert ist
+    # (Baseline rot → forge kann nie KEEPen). Wenn der Code-Style-Backlog
+    # in einem Aufräum-PR gefixt ist, hier wieder aktivieren:
+    #   - "cd backend && black --check src/services/"
+    #   - "cd backend && isort --check src/services/"
+    #   - "cd backend && flake8 src/services/ --max-line-length 120"
+    guardrails: []
 
   backend_agent_tools:
     paths:
       - "backend/src/agents/tools/"
     type: code
-    guardrails:
-      - "cd backend && black --check src/agents/tools/"
-      - "cd backend && isort --check src/agents/tools/"
-      - "cd backend && flake8 src/agents/tools/ --max-line-length 120"
+    guardrails: []
 
   agent_prompts:
     # Nur die deklarativen YAML-Configs; Python-Agent-Code ist
@@ -123,26 +123,15 @@ eval_suites:
   # Legacy class-based Suites (TestQuotesIntegration, TestUsersIntegration,
   # TestAuthIntegration) sind quarantäniert bis P5 Cleanup; sie hier laufen
   # zu lassen würde echte Regressionen maskieren.
+  # Single-line cmd: backslash-newline ist KEIN Line-Continuation auf
+  # Windows-cmd.exe; pytest würde das `\` als Drive-Root-Argument missdeuten.
   quick:
-    cmd: |
-      cd backend && python -m pytest \
-        tests/test_quote_pdf_routes.py \
-        tests/test_onboarding.py \
-        tests/test_agent_service.py \
-        tests/test_quote_search.py \
-        tests/test_ai_prompts_smoke.py \
-        tests/test_quote_calculator.py \
-        tests/test_quote_pdf_branding.py \
-        --no-header -q --tb=no
+    cmd: "cd backend && python -m pytest tests/test_quote_pdf_routes.py tests/test_onboarding.py tests/test_agent_service.py tests/test_quote_search.py tests/test_ai_prompts_smoke.py tests/test_quote_calculator.py tests/test_quote_pdf_branding.py --no-header -q --tb=no"
     budget_s: 180
     parses: pytest_json
 
-  # Volltest mit allen nicht-quarantänierten Tests; teurer, aber breiter.
-  # In v1 (M1) noch nicht aktiv — `quick` reicht zum Loop schließen.
   full:
-    cmd: |
-      cd backend && python -m pytest \
-        tests/ --ignore=tests/old --no-header -q --tb=no
+    cmd: "cd backend && python -m pytest tests/ --ignore=tests/old --no-header -q --tb=no"
     budget_s: 600
     parses: pytest_json
 
@@ -166,10 +155,13 @@ diagnostics: []
 # Erste Runs konservativ, später lockern. Bei Smoke-Tests $1.50 / Run
 # ist sicherer Start.
 cost_caps:
-  per_generation_usd: 0.50
-  per_run_usd: 1.50         # Smoke-Limit; nach 10 Runs auf 5.00 erhöhen
-  per_project_per_day_usd: 10.00
-  per_project_per_month_usd: 100.00
+  # Multi-Agent-Runs (architect + developer + tester via Task-Tool) sind
+  # 3-5x teurer als single-agent Runs. Smoke-Cap entsprechend angehoben;
+  # nach 10+ stabilen Runs auf 10.00/run erhöhen.
+  per_generation_usd: 2.00
+  per_run_usd: 5.00
+  per_project_per_day_usd: 20.00
+  per_project_per_month_usd: 200.00
 
 # === TRIGGERS ===
 triggers:

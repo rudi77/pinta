@@ -104,7 +104,7 @@ def _render_pdf(quote: dict, output_path: Path) -> None:
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.platypus import (
-        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image,
     )
 
     styles = getSampleStyleSheet()
@@ -133,6 +133,27 @@ def _render_pdf(quote: dict, output_path: Path) -> None:
     quote_number = quote.get("quote_number") or quote.get("number") or "ENTWURF"
     title = quote.get("project_title") or "Kostenvoranschlag"
     today = datetime.now().strftime("%d.%m.%Y")
+
+    # Company branding block (logo + header text)
+    company = quote.get("company") or {}
+    if company:
+        logo_path_str = (company.get("logo_path") or "").strip()
+        if logo_path_str:
+            logo_file = Path(logo_path_str)
+            if logo_file.is_file():
+                try:
+                    story.append(Image(str(logo_file), width=40 * mm, height=20 * mm))
+                except Exception:
+                    pass
+
+        company_lines = []
+        for field in ("company_name", "address", "vat_id"):
+            val = (company.get(field) or "").strip()
+            if val:
+                company_lines.append(val)
+        if company_lines:
+            story.append(Paragraph("<br/>".join(company_lines), body))
+        story.append(Spacer(1, 6 * mm))
 
     story.append(Paragraph(f"Kostenvoranschlag {quote_number}", title_style))
     story.append(Paragraph(f"Datum: {today}", small))
