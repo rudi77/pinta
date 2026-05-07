@@ -90,6 +90,31 @@ async def _persist_document_record(path: Path, size: int) -> int | None:
         return None
 
 
+async def _load_user_company(user_id: int) -> dict | None:
+    """Return company branding fields for *user_id*, or None on any failure.
+
+    Loads the user from the production AsyncSessionLocal. Tests patch this
+    function via monkeypatch so they don't need a live database.
+    """
+    from src.core.database import AsyncSessionLocal
+    from src.models.models import User
+
+    try:
+        async with AsyncSessionLocal() as db:
+            user = await db.get(User, user_id)
+            if user is None:
+                return None
+            company: dict[str, str] = {}
+            for field in ("company_name", "address", "vat_id", "logo_path"):
+                val = getattr(user, field, None)
+                if val:
+                    company[field] = val
+            return company or None
+    except Exception as exc:
+        logger.warning("generate_quote_pdf.load_user_company err=%s", exc)
+        return None
+
+
 def _fmt_eur(value: Any) -> str:
     try:
         return f"{float(value):,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -321,6 +346,17 @@ class GenerateQuotePdfTool(BaseTool):
             slug = _slugify(filename_hint or quote.get("project_title", "quote"))
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_path = _QUOTES_DIR / f"{ts}_{slug[:60]}.pdf"
+
+            # Spread user company branding unless caller supplied an
+            # explicit quote['company'] block (caller always wins).
+            if "company" not in quote:
+                from src.agents.tools.save_quote_to_db import current_user_id
+                uid = current_user_id.get()
+                if uid is not None:
+                    company_data = await _load_user_company(uid)
+                    if company_data:
+                        quote = dict(quote)
+                        quote["company"] = company_data
 
             _render_pdf(quote, output_path)
             size = output_path.stat().st_size

@@ -177,47 +177,45 @@ def test_pdf_omits_logo_when_logo_path_empty(tmp_path: Path) -> None:
 
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from src.models.models import User
 
 
 @pytest.mark.asyncio
 async def test_tool_execute_spreads_user_company_into_quote(
-    test_session: AsyncSession,
-    test_user: User,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Wenn ein User mit company_name/address/vat_id/logo_path im
-    current_user_id-ContextVar steht, muss das Tool diese Daten in das
-    `quote['company']`-Dict spreaden, BEVOR `_render_pdf` läuft.
+    """Wenn current_user_id im ContextVar gesetzt ist und der User
+    company-Daten hat, muss das Tool diese in das `quote['company']`-Dict
+    spreaden, BEVOR `_render_pdf` läuft.
 
-    Aktuell scheitert das, weil das Tool den User nicht aus der DB lädt.
+    Test mockt `_load_user_company` und `_persist_document_record` direkt —
+    das Spread-Verhalten ist die Akzeptanz, DB-Lookup ist Implementierung.
     """
     from src.agents.tools import generate_quote_pdf as tool_module
     from src.agents.tools.save_quote_to_db import current_user_id
 
-    # User mit Company-Daten ergänzen
-    test_user.company_name = "Maler Müller GmbH"
-    test_user.address = "Musterstraße 1, 12345 Berlin"
-    test_user.vat_id = "DE123456789"
-    # logo_path: simulieren wir mit einer echten 1x1 PNG
     logo_file = tmp_path / "logo.png"
     logo_file.write_bytes(_TINY_PNG)
-    test_user.logo_path = str(logo_file)
-    test_session.add(test_user)
-    await test_session.commit()
 
-    # Output-Verzeichnis auf tmp_path umlenken — sonst landet PDF im
-    # echten .taskforce_maler/quotes/
+    async def fake_load(user_id: int) -> dict:
+        assert user_id == 42
+        return {
+            "company_name": "Maler Müller GmbH",
+            "address": "Musterstraße 1, 12345 Berlin",
+            "vat_id": "DE123456789",
+            "logo_path": str(logo_file),
+        }
+
+    async def fake_persist(path, size):
+        return None  # skip DB persistence
+
+    monkeypatch.setattr(tool_module, "_load_user_company", fake_load)
+    monkeypatch.setattr(tool_module, "_persist_document_record", fake_persist)
     monkeypatch.setattr(tool_module, "_QUOTES_DIR", tmp_path / "quotes")
 
-    # current_user_id-ContextVar setzen
-    user_token = current_user_id.set(test_user.id)
+    user_token = current_user_id.set(42)
     try:
         tool = tool_module.GenerateQuotePdfTool()
-        # Quote-Dict OHNE explicit company-Block — soll vom Tool gefüllt werden
         result = await tool._execute(quote=_base_quote())
     finally:
         current_user_id.reset(user_token)
@@ -240,8 +238,6 @@ async def test_tool_execute_spreads_user_company_into_quote(
 
 @pytest.mark.asyncio
 async def test_tool_execute_explicit_company_overrides_user(
-    test_session: AsyncSession,
-    test_user: User,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -250,14 +246,20 @@ async def test_tool_execute_explicit_company_overrides_user(
     from src.agents.tools import generate_quote_pdf as tool_module
     from src.agents.tools.save_quote_to_db import current_user_id
 
-    test_user.company_name = "User-Default GmbH"
-    test_user.address = "User-Adresse 1"
-    test_session.add(test_user)
-    await test_session.commit()
+    load_calls: list[int] = []
 
+    async def fake_load(user_id: int) -> dict:
+        load_calls.append(user_id)
+        return {"company_name": "User-Default GmbH", "address": "User-Adresse 1"}
+
+    async def fake_persist(path, size):
+        return None
+
+    monkeypatch.setattr(tool_module, "_load_user_company", fake_load)
+    monkeypatch.setattr(tool_module, "_persist_document_record", fake_persist)
     monkeypatch.setattr(tool_module, "_QUOTES_DIR", tmp_path / "quotes")
 
-    user_token = current_user_id.set(test_user.id)
+    user_token = current_user_id.set(42)
     try:
         tool = tool_module.GenerateQuotePdfTool()
         quote = _base_quote()
@@ -273,6 +275,8 @@ async def test_tool_execute_explicit_company_overrides_user(
     text = _extract_pdf_text(Path(result["file_path"]))
     assert "Explicit-Override AG" in text
     assert "User-Default GmbH" not in text
+    # User-Lookup wurde gar nicht erst gemacht — explizite company gewinnt
+    assert load_calls == []
 
 
 @pytest.mark.asyncio
