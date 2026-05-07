@@ -50,6 +50,23 @@ surfaces:
       # PINTA nutzt JS/JSX, kein TypeScript — daher kein tsc.
       - "cd frontend && npm run lint -- --max-warnings 0"
 
+  # Quarantänierte Legacy-Class-Tests aus TODOList ⬜ Tech-Schuld (122 Tests).
+  # Diese Files dürfen von forge editiert werden, weil sie selbst der
+  # Refactor-Gegenstand sind — ihre Endpoint-Calls sind gegen eine alte
+  # API geschrieben, die es nicht mehr gibt.
+  # NICHT in dieser Surface enthalten: alle anderen tests/-Files (z.B.
+  # test_quote_pdf_branding.py, test_agent_endpoints.py) — die sind
+  # operative Verträge, kein Refactor-Material.
+  legacy_tests:
+    paths:
+      - "backend/tests/test_auth_integration.py"
+      - "backend/tests/test_users_integration.py"
+      - "backend/tests/test_quotes_integration.py"
+      - "backend/tests/test_documents_integration.py"
+      - "backend/tests/test_ai_integration.py"
+    type: code
+    guardrails: []
+
 # === FORBIDDEN — Pfade, die forge NIE editiert ===
 # Das ist die feinere Auflösung über Surfaces. Wenn ein Pfad sowohl in einer
 # Surface als auch hier ist, gewinnt forbidden.
@@ -133,6 +150,18 @@ eval_suites:
   full:
     cmd: "cd backend && python -m pytest tests/ --ignore=tests/old --no-header -q --tb=no"
     budget_s: 600
+    parses: pytest_json
+
+  # Fokussierte Suiten für legacy-Test-Revival. Wird via --eval-suite=legacy_X
+  # gewählt, damit forges Decision-Logik nur die jeweiligen Tests bewertet.
+  legacy_quotes:
+    cmd: "cd backend && python -m pytest tests/test_quotes_integration.py --no-header -q --tb=no"
+    budget_s: 120
+    parses: pytest_json
+
+  legacy_users:
+    cmd: "cd backend && python -m pytest tests/test_users_integration.py --no-header -q --tb=no"
+    budget_s: 180
     parses: pytest_json
 
 # === GATES — harte Pass/Fail, blocken Generation ===
