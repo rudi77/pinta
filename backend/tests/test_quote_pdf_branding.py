@@ -171,3 +171,122 @@ def test_pdf_omits_logo_when_logo_path_empty(tmp_path: Path) -> None:
     out = tmp_path / "quote.pdf"
     _render_pdf(quote, out)
     assert out.is_file()
+
+
+# --- Integration: Tool-Execute liest User-Profil ----------------------
+
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.models.models import User
+
+
+@pytest.mark.asyncio
+async def test_tool_execute_spreads_user_company_into_quote(
+    test_session: AsyncSession,
+    test_user: User,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wenn ein User mit company_name/address/vat_id/logo_path im
+    current_user_id-ContextVar steht, muss das Tool diese Daten in das
+    `quote['company']`-Dict spreaden, BEVOR `_render_pdf` läuft.
+
+    Aktuell scheitert das, weil das Tool den User nicht aus der DB lädt.
+    """
+    from src.agents.tools import generate_quote_pdf as tool_module
+    from src.agents.tools.save_quote_to_db import current_user_id
+
+    # User mit Company-Daten ergänzen
+    test_user.company_name = "Maler Müller GmbH"
+    test_user.address = "Musterstraße 1, 12345 Berlin"
+    test_user.vat_id = "DE123456789"
+    # logo_path: simulieren wir mit einer echten 1x1 PNG
+    logo_file = tmp_path / "logo.png"
+    logo_file.write_bytes(_TINY_PNG)
+    test_user.logo_path = str(logo_file)
+    test_session.add(test_user)
+    await test_session.commit()
+
+    # Output-Verzeichnis auf tmp_path umlenken — sonst landet PDF im
+    # echten .taskforce_maler/quotes/
+    monkeypatch.setattr(tool_module, "_QUOTES_DIR", tmp_path / "quotes")
+
+    # current_user_id-ContextVar setzen
+    user_token = current_user_id.set(test_user.id)
+    try:
+        tool = tool_module.GenerateQuotePdfTool()
+        # Quote-Dict OHNE explicit company-Block — soll vom Tool gefüllt werden
+        result = await tool._execute(quote=_base_quote())
+    finally:
+        current_user_id.reset(user_token)
+
+    assert result["success"] is True, result
+    pdf_path = Path(result["file_path"])
+    assert pdf_path.is_file()
+
+    text = _extract_pdf_text(pdf_path)
+    assert "Maler Müller GmbH" in text, (
+        f"User.company_name nicht im PDF. Auszug:\n{text[:600]}"
+    )
+    assert "Musterstraße 1, 12345 Berlin" in text
+    assert "DE123456789" in text
+    # Logo (eingebettetes Image) muss im PDF sein
+    assert _count_pdf_images(pdf_path) >= 1, (
+        "User.logo_path war gesetzt, aber kein Bild im PDF eingebettet."
+    )
+
+
+@pytest.mark.asyncio
+async def test_tool_execute_explicit_company_overrides_user(
+    test_session: AsyncSession,
+    test_user: User,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wenn der Aufrufer explizit `quote['company']` mitschickt, gewinnt
+    das gegenüber den User-Daten — der Caller behält die Kontrolle."""
+    from src.agents.tools import generate_quote_pdf as tool_module
+    from src.agents.tools.save_quote_to_db import current_user_id
+
+    test_user.company_name = "User-Default GmbH"
+    test_user.address = "User-Adresse 1"
+    test_session.add(test_user)
+    await test_session.commit()
+
+    monkeypatch.setattr(tool_module, "_QUOTES_DIR", tmp_path / "quotes")
+
+    user_token = current_user_id.set(test_user.id)
+    try:
+        tool = tool_module.GenerateQuotePdfTool()
+        quote = _base_quote()
+        quote["company"] = {
+            "company_name": "Explicit-Override AG",
+            "address": "Override-Straße 99",
+        }
+        result = await tool._execute(quote=quote)
+    finally:
+        current_user_id.reset(user_token)
+
+    assert result["success"] is True
+    text = _extract_pdf_text(Path(result["file_path"]))
+    assert "Explicit-Override AG" in text
+    assert "User-Default GmbH" not in text
+
+
+@pytest.mark.asyncio
+async def test_tool_execute_works_without_user_context(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tool darf ohne current_user_id (z.B. im CLI-Smoke-Test) nicht crashen."""
+    from src.agents.tools import generate_quote_pdf as tool_module
+
+    monkeypatch.setattr(tool_module, "_QUOTES_DIR", tmp_path / "quotes")
+
+    tool = tool_module.GenerateQuotePdfTool()
+    # KEIN current_user_id gesetzt — soll defensiv sein
+    result = await tool._execute(quote=_base_quote())
+    assert result["success"] is True
+    assert Path(result["file_path"]).is_file()
