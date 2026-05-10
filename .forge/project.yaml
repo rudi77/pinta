@@ -169,6 +169,11 @@ eval_suites:
     budget_s: 180
     parses: pytest_json
 
+  legacy_auth:
+    cmd: "cd backend && python -m pytest tests/test_auth_integration.py --no-header -q --tb=no"
+    budget_s: 120
+    parses: pytest_json
+
 # === GATES — harte Pass/Fail, blocken Generation ===
 # Bewusst minimal in v1: nur Tests müssen grün sein. Lint läuft als
 # Surface-Preflight (s.o.) — schneller, ohne Eval-Suite-Cost.
