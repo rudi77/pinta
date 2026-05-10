@@ -174,6 +174,17 @@ eval_suites:
     budget_s: 120
     parses: pytest_json
 
+  # Pendant zu den anderen legacy_*-Suiten; war zuvor in der Spec
+  # nicht definiert. forge fällt sonst auf die Default-`quick`-Suite
+  # zurück und kann test_ai_integration.py-Verbesserungen nicht messen.
+  # Absoluter Python-Pfad: forge fährt im git-Worktree ohne `.venv`
+  # (gitignored), daher würde `python` aufs System-Python kollabieren
+  # und sqlalchemy nicht finden → "no measurement for pytest_pass_rate".
+  legacy_ai:
+    cmd: 'cd backend && "C:/Users/rudi/source/pinta/backend/.venv/Scripts/python.exe" -m pytest tests/test_ai_integration.py --no-header -q --tb=no'
+    budget_s: 120
+    parses: pytest_json
+
 # === GATES — harte Pass/Fail, blocken Generation ===
 # Bewusst minimal in v1: nur Tests müssen grün sein. Lint läuft als
 # Surface-Preflight (s.o.) — schneller, ohne Eval-Suite-Cost.
@@ -195,10 +206,11 @@ diagnostics: []
 # ist sicherer Start.
 cost_caps:
   # Multi-Agent-Runs (architect + developer + tester via Task-Tool) sind
-  # 3-5x teurer als single-agent Runs. Smoke-Cap entsprechend angehoben;
-  # nach 10+ stabilen Runs auf 10.00/run erhöhen.
-  per_generation_usd: 2.00
-  per_run_usd: 5.00
+  # 3-5x teurer als single-agent Runs. 2026-05-10: per_generation auf 5.00
+  # angehoben weil $2 in Run 01KR8Y2G40 Generation 0 hit den cap mid-run
+  # (architect-plan + developer-edits zusammen). per_run analog mit.
+  per_generation_usd: 5.00
+  per_run_usd: 12.00
   per_project_per_day_usd: 20.00
   per_project_per_month_usd: 200.00
 
@@ -234,3 +246,18 @@ release:
   conventional_commits: true
   on_main_green: "off"     # Tag erst, wenn die ersten 5 Auto-PRs sauber durch sind
   changelog: "CHANGELOG.md"
+
+# === BOARD (forge v0.4 — `forge board-loop`) ===
+# Aktive Trigger-Quelle: forge board-loop pollt das hier konfigurierte
+# GitHub Project, filtert nach Status + Labels, dispatched pro Issue
+# einen normalen issue_label-Trigger durch die unveränderte 5-Phasen-
+# Pipeline. Project #5 wurde am 2026-05-10 angelegt; Auto-Merge ist im
+# Repo aktiviert (`autoMergeAllowed: true`).
+board:
+  provider: github
+  owner: rudi77
+  project_number: 5          # "PINTA" project — gh project list --owner rudi77
+  filter_status: "Todo"      # Status-Field-Wert für ready
+  filter_labels: ["bug"]     # AND — Issue muss alle Labels tragen
+  default_focus_template: "issue-{number}"
+  default_template_id: "board_loop_v1"
